@@ -4,7 +4,7 @@ shiodome47 のアプリで使い回す、共通部品の置き場です。部品
 
 | 部品 | 中身 |
 |---|---|
-| [`@shiodome47/planner`](packages/planner) | 時間軸とプロジェクト。今は土台（`/core`：データの形と決まりごと）。画面（`/timeline`・`/projects`）はこれから |
+| [`@shiodome47/planner`](packages/planner) | 時間軸とプロジェクト。土台（`/core`：データの形と決まりごと）と、画面（`/timeline`・`/projects`） |
 
 カードを並べる棚と `<CardBoard>` は、別のパッケージ [linkshelf](https://github.com/shiodome47/linkshelf) にあります。
 
