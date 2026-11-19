@@ -1,0 +1,33 @@
+# PR を出したときと main が更新されたときに、自動で確認する（CI）。
+# 脆弱性の確認・型のチェック・テスト・ビルドが、すべての部品で通るかを見る。
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # 手元と同じ npm 11 を使う（版がちがうと package-lock.json が書き換わることがあるため）
+      - run: npm install -g npm@11
+      - run: npm ci
+      # 部品を使う人に届く依存に、知られている重い脆弱性が無いか（あれば止める）
+      - run: npm audit --omit=dev --audit-level=high
+      # 開発の道具まで含めた確認。直る版がまだ無いことも多いので、知らせるだけにする
+      - run: npm audit --audit-level=high
+        continue-on-error: true
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

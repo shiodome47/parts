@@ -1,0 +1,43 @@
+{
+  "name": "@shiodome47/planner",
+  "version": "0.1.0",
+  "description": "時間軸（今日・今週・数か月・今年）とプロジェクトの部品。まずは土台（データの形と決まりごと。画面なし）から",
+  "keywords": [
+    "planner",
+    "todo",
+    "habits",
+    "timeline",
+    "projects",
+    "recurring"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shiodome47/parts.git",
+    "directory": "packages/planner"
+  },
+  "bugs": {
+    "url": "https://github.com/shiodome47/parts/issues"
+  },
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core.js"
+    }
+  },
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  }
+}
