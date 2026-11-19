@@ -1,0 +1,27 @@
+{
+  "name": "shiodome47-parts",
+  "private": true,
+  "description": "shiodome47 の共通部品（@shiodome47/…）を置くところ。パッケージは packages/ の下に 1 つずつ",
+  "license": "MIT",
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11",
+      "onFail": "warn"
+    }
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.4.5",
+    "vite": "^8.3.8",
+    "vitest": "^4.1.12"
+  }
+}
