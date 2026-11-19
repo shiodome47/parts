@@ -46,8 +46,12 @@ export interface VisionView {
 /** 宝地図（ビジョンボード）。今は 1 枚（id は 'main'） */
 export interface VisionBoard {
   id: string
-  /** ボードの形 */
-  aspect: 'landscape' | 'portrait' | 'square'
+  /**
+   * ボードの形。scroll は「下へ伸びる」: 幅は見える枠いっぱいで、高さは length で決まり、ページのように下へスクロールして見る
+   */
+  aspect: 'landscape' | 'portrait' | 'square' | 'scroll'
+  /** 下へ伸びるボード（aspect が scroll）の高さ（幅に対する割合。2 なら幅の 2 倍の高さ） */
+  length?: number
   /** 背景 */
   background?: 'paper' | 'night' | 'cork'
   items: VisionItem[]

@@ -7,6 +7,7 @@
 - **見え方を覚える**: 今の拡大と位置に名前を付けて覚え、押すとその見え方に。最後に選んだ見え方から始まる
 - **全画面**・**枠いっぱい**（宝地図を画面にすき間なく広げる）
 - **道具の行**は 3 段階（文字つき・アイコンだけ・たたむ）
+- **下へ伸びるボード**: ボードの形を「下へ伸びる」にすると、幅は枠いっぱいのまま、下へいくらでも広げられる（「編集」の「下に広げる」「下を詰める」）。ホイール・トラックパッドの 2 本指・指・ドラッグで、上下に動かして見る。貼るものは、今見ているあたりに出る
 - 位置は割合で持つので、PC で並べたものが、スマホでもそのまま縮んで同じ見た目
 
 ```bash
@@ -76,11 +77,12 @@ function MyBoard() {
 | `emptyBoard(now?, id?)` / `getBoard(data, now?, id?)` | 空のボード／アプリのデータ（`boards` を持つもの）からボードを取り出す |
 | `addItem` `updateItem` `removeItem` `moveLayer` `byLayer` | 貼る・直す・はがす・重なりを変える・重なりの順に並べる |
 | `addView` `removeView` `viewToZoom` | 見え方を覚える・消す・今の画面での倍率と位置にする |
+| `setAspect` `setLength` `growBoard` `shrinkBoard` `boardLength` `boardRatio` `contentBottom` | ボードの形を変える（下へ伸びるにしても並びはそのまま）・下へ伸びるボードの高さを変える・広げる・詰める（貼ったものは切らない）・今の高さ・幅÷高さ・貼ったもののいちばん下 |
 | `clampZoom` `zoomAt` `fitRect` `coverScale` | 拡大の計算（枠からはみ出さない・指の位置で拡大・ある四角に寄る・枠いっぱいの倍率） |
 
 ## English
 
-A vision board (moodboard) React component: pin images and words, pinch/trackpad/Ctrl+wheel zoom, double-tap to focus an item, save named views, full screen, "fill the frame", and a three-level toolbar. Pass `board` and `onChange` (you store the board anywhere), `uploadImage(file) => url` to enable image pinning, and optionally `loadImage(url) => Blob | url` for protected images. Import `@shiodome47/vision-board/style.css`; styles apply only inside `.vision-board` and colors come from `--vb-*` variables. UI labels are Japanese.
+A vision board (moodboard) React component: pin images and words, pinch/trackpad/Ctrl+wheel zoom, double-tap to focus an item, save named views, full screen, "fill the frame", a three-level toolbar, and a "grows downward" board shape you scroll through (wheel, two-finger trackpad, touch or drag). Pass `board` and `onChange` (you store the board anywhere), `uploadImage(file) => url` to enable image pinning, and optionally `loadImage(url) => Blob | url` for protected images. Import `@shiodome47/vision-board/style.css`; styles apply only inside `.vision-board` and colors come from `--vb-*` variables. UI labels are Japanese.
 
 ## License
 
