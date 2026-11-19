@@ -1,0 +1,1429 @@
+/*
+ * @shiodome47/planner の見た目（時間軸・プロジェクトの画面）。
+ * すべて .planner の中だけに効く（使う側のページの見た目は変えない）。
+ * 色は下の変数で決まる。使う側は .planner { --pl-accent: #2563eb; } のように上書きして色を合わせられる。
+ */
+:where(.planner) {
+  color-scheme: light;
+  --pl-page-bg: #f5f5f5;
+  --pl-panel: #fff;
+  --pl-panel-2: #f0f0f0;
+  --pl-border: #e0e0e0;
+  --pl-text: #171717;
+  --pl-muted: #666;
+  --pl-accent: #0d9488;
+  --pl-accent-text: #fff;
+  --pl-danger: #dc2626;
+  --pl-warning: #b45309;
+  --pl-ok: #0f766e;
+  /* 上に固定の見出しがあるページでは、その高さ（帯が見出しの下にくっつく） */
+  --pl-sticky-top: 0px;
+  color: var(--pl-text);
+}
+:where(.planner[data-theme='dark']) {
+  color-scheme: dark;
+  --pl-page-bg: #0a0a0a;
+  --pl-panel: #171717;
+  --pl-panel-2: #262626;
+  --pl-border: #333;
+  --pl-text: #f5f5f5;
+  --pl-muted: #a3a3a3;
+  --pl-accent: #14b8a6;
+  --pl-accent-text: #042f2e;
+  --pl-danger: #f87171;
+  --pl-warning: #fbbf24;
+  --pl-ok: #2dd4bf;
+}
+@media (prefers-color-scheme: dark) {
+  :where(.planner[data-theme='system']) {
+    color-scheme: dark;
+    --pl-page-bg: #0a0a0a;
+    --pl-panel: #171717;
+    --pl-panel-2: #262626;
+    --pl-border: #333;
+    --pl-text: #f5f5f5;
+    --pl-muted: #a3a3a3;
+    --pl-accent: #14b8a6;
+    --pl-accent-text: #042f2e;
+    --pl-danger: #f87171;
+    --pl-warning: #fbbf24;
+    --pl-ok: #2dd4bf;
+  }
+}
+.planner .pl-icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pl-muted);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+.planner .pl-icon-button svg {
+  width: 17px;
+  height: 17px;
+}
+.planner .pl-icon-button:hover {
+  background: var(--pl-panel-2);
+  color: var(--pl-text);
+}
+.planner .pl-icon-button:focus-visible {
+  outline: 2px solid var(--pl-accent);
+  outline-offset: 1px;
+}
+@keyframes lamp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* ─── 小窓 ─── */
+.planner .pl-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  border: 1px solid var(--pl-border);
+  border-radius: 14px;
+  background: var(--pl-panel);
+  color: var(--pl-text);
+  box-shadow: 0 20px 50px rgb(0 0 0 / 0.35);
+}
+.planner .pl-dialog::backdrop {
+  background: rgb(0 0 0 / 0.5);
+}
+.planner .pl-dialog-body {
+  padding: 16px 18px 18px;
+}
+.planner .pl-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.planner .pl-dialog-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.planner .pl-text,
+.planner .pl-note {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.planner .pl-note {
+  color: var(--pl-muted);
+  font-size: 12px;
+}
+.planner .pl-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.planner .pl-row-end {
+  justify-content: flex-end;
+}
+.planner .pl-stack {
+  display: grid;
+  gap: 8px;
+}
+.planner .pl-button {
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--pl-border);
+  border-radius: 8px;
+  background: var(--pl-panel-2);
+  color: var(--pl-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.planner .pl-button:hover {
+  border-color: var(--pl-muted);
+}
+.planner .pl-button:focus-visible,
+.planner .pl-input:focus-visible {
+  outline: 2px solid var(--pl-accent);
+  outline-offset: 1px;
+}
+.planner .pl-button-primary {
+  border-color: var(--pl-accent);
+  background: var(--pl-accent);
+  color: var(--pl-accent-text);
+}
+.planner .pl-button-danger {
+  color: var(--pl-danger);
+}
+.planner .pl-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--pl-border);
+  border-radius: 8px;
+  background: var(--pl-panel-2);
+  color: var(--pl-text);
+  font: inherit;
+  font-size: 13px;
+}
+.planner .pl-confirm {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--pl-border);
+  border-radius: 10px;
+  background: var(--pl-panel-2);
+}
+/* ─── 時間軸ボード ─── */
+.planner .pl-board {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(260px, 1fr));
+  gap: 12px;
+  padding: 16px;
+  align-items: start;
+  overflow-x: auto;
+}
+@media (max-width: 900px) {
+.planner .pl-board {
+    grid-template-columns: repeat(5, 86vw);
+    scroll-snap-type: x mandatory;
+    scroll-padding: 16px;
+    overscroll-behavior-x: contain;
+  }
+.planner .pl-column {
+    scroll-snap-align: start;
+  }
+}
+.planner .pl-column {
+  border: 1px solid var(--pl-border);
+  border-radius: 14px;
+  background: var(--pl-panel);
+  padding: 12px 10px 8px;
+  min-width: 0;
+}
+.planner .pl-column-today {
+  border-color: color-mix(in srgb, var(--pl-accent) 55%, var(--pl-border));
+}
+.planner .pl-column-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px 6px;
+}
+.planner .pl-column-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.planner .pl-column-sub {
+  margin-left: 6px;
+  color: var(--pl-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+.planner .pl-column-period {
+  color: var(--pl-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.planner .pl-block {
+  padding: 6px 0;
+  border-top: 1px solid var(--pl-border);
+}
+.planner .pl-block-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 4px 4px;
+  color: var(--pl-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.planner .pl-count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.planner .pl-count-full {
+  color: var(--pl-ok);
+}
+.planner .pl-tomorrow {
+  background: color-mix(in srgb, var(--pl-panel-2) 50%, transparent);
+  border-radius: 0 0 10px 10px;
+  margin: 0 -10px -8px;
+  padding: 6px 10px 8px;
+}
+.planner .pl-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.planner .pl-group {
+  margin-top: 4px;
+}
+.planner .pl-group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 4px 2px;
+  color: var(--pl-muted);
+  font-size: 11px;
+}
+.planner .pl-pbadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: var(--pl-pc-bg);
+  color: var(--pl-pc);
+  font-size: 11px;
+  font-weight: 700;
+}
+/* 優先度の色 */
+.planner .pl-p-A { --pl-pc: #e0707a; --pl-pc-bg: color-mix(in srgb, #e0707a 16%, transparent); }
+.planner .pl-p-B { --pl-pc: #d4a04c; --pl-pc-bg: color-mix(in srgb, #d4a04c 16%, transparent); }
+.planner .pl-p-C { --pl-pc: #9a9a9a; --pl-pc-bg: color-mix(in srgb, #9a9a9a 14%, transparent); }
+.planner .pl-p-D { --pl-pc: #777; --pl-pc-bg: color-mix(in srgb, #777 10%, transparent); }
+.planner .pl-p-P { --pl-pc: #8f86c9; --pl-pc-bg: color-mix(in srgb, #8f86c9 16%, transparent); }
+/* やること・習慣の 1 行 */
+.planner .pl-task,
+.planner .pl-habit,
+.planner .pl-goal {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 2px 2px 2px 4px;
+  border-radius: 8px;
+}
+.planner .pl-task:hover,
+.planner .pl-habit:hover,
+.planner .pl-goal:hover {
+  background: var(--pl-panel-2);
+}
+.planner .pl-task-label {
+  width: 22px;
+  flex-shrink: 0;
+  color: var(--pl-pc);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.planner .pl-task-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.planner .pl-task-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.planner .pl-task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.planner .pl-task-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.planner .pl-faded {
+  opacity: 0.45;
+}
+.planner .pl-done .pl-task-title {
+  color: var(--pl-muted);
+  text-decoration: line-through;
+}
+.planner .pl-circle,
+.planner .pl-square {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1.5px solid var(--pl-border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--pl-accent-text);
+  cursor: pointer;
+}
+.planner .pl-square {
+  border-radius: 5px;
+}
+.planner .pl-circle svg,
+.planner .pl-square svg {
+  width: 13px;
+  height: 13px;
+}
+.planner .pl-done .pl-circle,
+.planner .pl-done .pl-square {
+  border-color: var(--pl-accent);
+  background: var(--pl-accent);
+}
+.planner .pl-circle:focus-visible,
+.planner .pl-square:focus-visible,
+.planner .pl-row-button:focus-visible,
+.planner .pl-place-button:focus-visible {
+  outline: 2px solid var(--pl-accent);
+  outline-offset: 1px;
+}
+.planner .pl-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--pl-panel-2);
+  color: var(--pl-muted);
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.planner .pl-row-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pl-muted);
+  cursor: pointer;
+}
+.planner .pl-row-button svg {
+  width: 15px;
+  height: 15px;
+}
+.planner .pl-row-button:hover {
+  background: var(--pl-border);
+  color: var(--pl-text);
+}
+.planner .pl-place-button {
+  padding: 1px 6px;
+  border: 1px solid var(--pl-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pl-muted);
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.planner .pl-place-button:hover {
+  border-color: var(--pl-accent);
+  color: var(--pl-accent);
+}
+@media (hover: hover) {
+.planner .pl-place-button {
+    opacity: 0;
+  }
+.planner .pl-task:hover .pl-place-button,
+.planner .pl-place-button:focus-visible {
+    opacity: 1;
+  }
+}
+/* 追加の入力欄 */
+.planner .pl-add {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.planner .pl-add-row {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+}
+.planner .pl-add-input,
+.planner .pl-inline-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pl-text);
+  font: inherit;
+  font-size: 13px;
+}
+.planner .pl-add-input::placeholder {
+  color: var(--pl-muted);
+}
+.planner .pl-add-input:focus,
+.planner .pl-inline-input {
+  border-color: var(--pl-border);
+  background: var(--pl-panel-2);
+  outline: none;
+}
+.planner .pl-add-priorities,
+.planner .pl-menu-priorities {
+  display: flex;
+  gap: 4px;
+}
+.planner .pl-add:not(:focus-within) .pl-add-priorities {
+  display: none;
+}
+.planner .pl-pchip {
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--pl-pc-bg);
+  color: var(--pl-pc);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.planner .pl-pchip[aria-checked='true'],
+.planner .pl-pchip[aria-pressed='true'] {
+  border-color: var(--pl-pc);
+}
+/* メニュー */
+.planner .pl-menu {
+  position: relative;
+}
+.planner .pl-menu-list {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 30;
+  min-width: 170px;
+  padding: 6px;
+  border: 1px solid var(--pl-border);
+  border-radius: 10px;
+  background: var(--pl-panel);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.3);
+  display: grid;
+  gap: 2px;
+}
+.planner .pl-menu-priorities {
+  padding: 2px 4px 6px;
+  border-bottom: 1px solid var(--pl-border);
+  margin-bottom: 2px;
+}
+.planner .pl-menu-item {
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pl-text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.planner .pl-menu-item:hover:not(:disabled) {
+  background: var(--pl-panel-2);
+}
+.planner .pl-menu-item:disabled {
+  color: var(--pl-muted);
+  cursor: default;
+}
+.planner .pl-menu-danger {
+  color: var(--pl-danger);
+}
+.planner .pl-menu-separator {
+  height: 1px;
+  margin: 2px 0;
+  background: var(--pl-border);
+}
+/* ─── プロジェクト ─── */
+.planner .pl-projects {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+  padding: 16px;
+  align-items: start;
+}
+@media (max-width: 640px) {
+.planner .pl-projects {
+    grid-template-columns: 1fr;
+  }
+}
+.planner .pl-project {
+  border: 1px solid var(--pl-border);
+  border-radius: 14px;
+  background: var(--pl-panel);
+  padding: 12px 10px 8px;
+}
+.planner .pl-project-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 8px;
+}
+.planner .pl-project-header h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+}
+.planner .pl-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--pl-cc);
+}
+.planner .pl-project-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 80px;
+  border: 1px dashed var(--pl-border);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--pl-muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.planner .pl-project-add svg {
+  width: 16px;
+  height: 16px;
+}
+.planner .pl-project-add:hover {
+  color: var(--pl-text);
+  border-color: var(--pl-muted);
+}
+.planner .pl-project-new {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.planner .pl-goal {
+  align-items: flex-start;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.planner .pl-goal .pl-circle {
+  margin-top: 1px;
+}
+.planner .pl-select {
+  padding: 2px 6px;
+  border: 1px solid var(--pl-border);
+  border-radius: 6px;
+  background: var(--pl-panel-2);
+  color: var(--pl-text);
+  font: inherit;
+  font-size: 12px;
+}
+/* プロジェクトの色（印・チップ） */
+.planner .pl-color-teal { --pl-cc: #14b8a6; }
+.planner .pl-color-blue { --pl-cc: #3b82f6; }
+.planner .pl-color-purple { --pl-cc: #a855f7; }
+.planner .pl-color-pink { --pl-cc: #ec4899; }
+.planner .pl-color-orange { --pl-cc: #f97316; }
+.planner .pl-color-red { --pl-cc: #ef4444; }
+.planner .pl-color-yellow { --pl-cc: #eab308; }
+.planner .pl-color-green { --pl-cc: #22c55e; }
+.planner .pl-chip[class*='pl-color-'] {
+  background: color-mix(in srgb, var(--pl-cc) 16%, transparent);
+  color: var(--pl-cc);
+}
+/* ─── 詰めた表示（棚と同じくらいの密度。項目が増えても一覧しやすく） ─── */
+.planner .pl-board {
+  grid-template-columns: repeat(5, minmax(230px, 1fr));
+  gap: 10px;
+  padding: 12px;
+}
+.planner .pl-column,
+.planner .pl-project {
+  padding: 10px 8px 6px;
+  border-radius: 12px;
+}
+.planner .pl-column-header {
+  padding: 0 4px 4px;
+}
+.planner .pl-column-header h2,
+.planner .pl-project-header h2 {
+  font-size: 14px;
+}
+.planner .pl-header-count {
+  display: none;
+  font-size: 11px;
+  color: var(--pl-muted);
+  font-variant-numeric: tabular-nums;
+}
+.planner .pl-block {
+  padding: 4px 0;
+}
+.planner .pl-block-title {
+  margin: 0 4px 2px;
+  font-size: 10.5px;
+}
+.planner .pl-group {
+  margin-top: 2px;
+}
+.planner .pl-group-title {
+  margin: 4px 4px 0;
+  font-size: 10.5px;
+}
+.planner .pl-pbadge {
+  width: 15px;
+  height: 15px;
+  font-size: 10px;
+  border-radius: 4px;
+}
+.planner .pl-task,
+.planner .pl-habit,
+.planner .pl-goal {
+  min-height: 28px;
+  gap: 6px;
+  padding: 0 0 0 4px;
+}
+.planner .pl-goal {
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.planner .pl-goal .pl-circle {
+  margin-top: 0;
+}
+.planner .pl-task-label {
+  width: 20px;
+  font-size: 10.5px;
+}
+/* 名前は 1 行に収め、長ければ … で切る（全文はマウスを乗せると出る） */
+.planner .pl-task-main {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+.planner .pl-task-title {
+  font-size: 13.5px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.planner .pl-task-meta {
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+}
+.planner .pl-chip {
+  padding: 0 5px;
+  font-size: 10.5px;
+  line-height: 16px;
+}
+.planner .pl-circle,
+.planner .pl-square {
+  width: 17px;
+  height: 17px;
+}
+.planner .pl-circle svg,
+.planner .pl-square svg {
+  width: 11px;
+  height: 11px;
+}
+.planner .pl-row-button {
+  width: 24px;
+  height: 24px;
+}
+.planner .pl-row-button svg {
+  width: 14px;
+  height: 14px;
+}
+.planner .pl-add-input {
+  padding: 4px 6px;
+  font-size: 12.5px;
+}
+.planner .pl-add {
+  margin-top: 2px;
+}
+.planner .pl-select-quiet {
+  flex-shrink: 0;
+  max-width: 6.5em;
+  padding: 0 2px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--pl-muted);
+  font-size: 11px;
+}
+.planner .pl-select-quiet:hover,
+.planner .pl-select-quiet:focus {
+  border-color: var(--pl-border);
+  color: var(--pl-text);
+}
+.planner .pl-projects {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+  padding: 12px;
+}
+.planner .pl-project-header {
+  padding: 0 4px 4px;
+}
+.planner .pl-project-add {
+  min-height: 56px;
+  font-size: 13px;
+}
+.planner .pl-pdot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pl-cc);
+}
+/* ─── すっきり表示（慣れたら要らない説明の文字を消す） ─── */
+.planner.pl-simple .pl-block-title,
+.planner.pl-simple .pl-group-title,
+.planner.pl-simple .pl-column-sub,
+.planner.pl-simple .pl-column-period {
+  display: none;
+}
+.planner.pl-simple .pl-header-count {
+  display: inline;
+  margin-left: auto;
+}
+.planner.pl-simple .pl-column-header {
+  justify-content: flex-start;
+  gap: 8px;
+}
+/* 優先度の見出しの代わりに、まとまりの間に細い線 */
+.planner.pl-simple .pl-group + .pl-group {
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px dashed var(--pl-border);
+}
+/* 明日の欄は、見出しの代わりに「明日」の小さな印 */
+.planner.pl-simple .pl-tomorrow::before {
+  content: '明日';
+  display: block;
+  margin: 0 4px 2px;
+  color: var(--pl-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+/* 明日の欄を、列の枠（詰めた余白）に合わせる */
+.planner .pl-tomorrow {
+  margin: 0 -8px -6px;
+  padding: 4px 8px 6px;
+  border-radius: 0 0 11px 11px;
+}
+/* 足す欄の日付・くり返しは控えめに */
+.planner .pl-add-row .pl-select {
+  border-color: transparent;
+  background: transparent;
+  color: var(--pl-muted);
+  font-size: 11px;
+}
+.planner .pl-add-row .pl-select:focus,
+.planner .pl-add-row .pl-select:hover {
+  border-color: var(--pl-border);
+  color: var(--pl-text);
+}
+@media (hover: hover) {
+.planner .pl-task .pl-menu > .pl-row-button,
+.planner .pl-habit .pl-menu > .pl-row-button,
+.planner .pl-goal .pl-menu > .pl-row-button {
+    opacity: 0;
+  }
+.planner .pl-task:hover .pl-menu > .pl-row-button,
+.planner .pl-habit:hover .pl-menu > .pl-row-button,
+.planner .pl-goal:hover .pl-menu > .pl-row-button,
+.planner .pl-menu > .pl-row-button[aria-expanded='true'],
+.planner .pl-menu > .pl-row-button:focus-visible {
+    opacity: 1;
+  }
+}
+/* ─── ドラッグ ─── */
+.planner .pl-task,
+.planner .pl-habit {
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.planner .pl-task:focus-visible,
+.planner .pl-habit:focus-visible {
+  outline: 2px solid var(--pl-accent);
+  outline-offset: -2px;
+}
+.planner .pl-dragging {
+  background: var(--pl-panel-2);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
+  cursor: grabbing;
+}
+.planner .pl-project.pl-dragging {
+  opacity: 0.9;
+}
+.planner .pl-grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 24px;
+  margin-left: -4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--pl-muted);
+  cursor: grab;
+  touch-action: none;
+}
+.planner .pl-grip svg {
+  width: 14px;
+  height: 14px;
+}
+.planner .pl-grip:focus-visible {
+  outline: 2px solid var(--pl-accent);
+}
+/* 期日目標の期日（チェックのすぐ右。押すと日付を選べる） */
+.planner .pl-due {
+  position: relative;
+  flex-shrink: 0;
+  width: 3.9em;
+}
+.planner .pl-due-button {
+  width: 100%;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--pl-panel-2);
+  color: var(--pl-muted);
+  font: inherit;
+  font-size: 11px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.planner .pl-due-button:hover {
+  color: var(--pl-text);
+}
+.planner .pl-due-button:focus-visible {
+  outline: 2px solid var(--pl-accent);
+}
+.planner .pl-due-empty .pl-due-button {
+  background: transparent;
+  border: 1px dashed var(--pl-border);
+  line-height: 16px;
+}
+.planner .pl-due-soon .pl-due-button {
+  color: var(--pl-warning);
+}
+.planner .pl-done .pl-due-button {
+  opacity: 0.6;
+}
+/* 日付の入力欄そのものは隠し、日付を選ぶ画面を開くためだけに使う */
+.planner .pl-due-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+/* ─── 画像 ─── */
+.planner .pl-dialog-wide {
+  width: min(960px, calc(100vw - 32px));
+}
+/* ─── メモ ─── */
+.planner .pl-title-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.planner .pl-title-button:focus-visible {
+  outline: 2px solid var(--pl-accent);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+.planner .pl-note-mark {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  color: var(--pl-accent);
+}
+.planner .pl-note-input {
+  min-height: 12em;
+  resize: vertical;
+  line-height: 1.6;
+}
+.planner .pl-note-view {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--pl-border);
+  border-radius: 8px;
+  background: var(--pl-panel-2);
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.planner .pl-note-hint {
+  margin: 0 auto 0 0;
+  align-self: center;
+}
+@media (hover: none) {
+.planner .pl-note-hint {
+    display: none;
+  }
+}
+/* 名前（押すとメモ）: 長ければ … で切る */
+.planner .pl-title-button.pl-task-title {
+  display: flex;
+  overflow: hidden;
+}
+.planner .pl-title-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* プロジェクトの画面: 名前は折り返して全文を出す（期日・チェックは 1 行目にそろえる） */
+.planner .pl-title-wrap.pl-task-title {
+  align-items: flex-start;
+  overflow: visible;
+}
+.planner .pl-title-wrap .pl-title-text {
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+.planner .pl-title-wrap .pl-note-mark {
+  margin-top: 0.3em;
+}
+.planner .pl-goal,
+.planner .pl-project .pl-habit {
+  align-items: flex-start;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.planner .pl-goal > .pl-circle,
+.planner .pl-goal > .pl-due,
+.planner .pl-project .pl-habit > .pl-square {
+  margin-top: 1px;
+}
+.planner .pl-goal > .pl-menu,
+.planner .pl-project .pl-habit > .pl-menu,
+.planner .pl-project .pl-habit > .pl-select {
+  margin-top: -3px;
+}
+/* 期日目標を足す欄（上の行と同じ並び: ＋・期日・名前） */
+.planner .pl-goal-add {
+  align-items: center;
+  margin-top: 2px;
+}
+.planner .pl-goal-add:hover {
+  background: transparent;
+}
+.planner .pl-goal-add-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  color: var(--pl-muted);
+}
+.planner .pl-goal-add-mark svg {
+  width: 14px;
+  height: 14px;
+}
+.planner .pl-goal-add > .pl-due {
+  margin-top: 0;
+}
+.planner .pl-goal-add .pl-add {
+  margin-top: 0;
+}
+.planner .pl-goal-add .pl-add-input {
+  padding-left: 2px;
+}
+/* 押せる名前（ボタン）も、ほかの名前と同じ文字の大きさにする（font: inherit で大きくなっていた） */
+.planner .pl-title-button.pl-task-title {
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+/* 毎月の日（20日・月末）: 目立たない小さな印 */
+.planner .pl-day {
+  flex-shrink: 0;
+  color: var(--pl-muted);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.planner .pl-day-over {
+  color: var(--pl-warning);
+}
+/* 「その日」で今日・今週の列に自動で出ている毎月の習慣 */
+.planner .pl-habit-auto .pl-square {
+  border-style: dashed;
+}
+@media (hover: hover) {
+.planner .pl-habit:hover .pl-place-button {
+    opacity: 1;
+  }
+}
+/* すっきり表示: 来週の欄にも小さな「来週」の印 */
+.planner.pl-simple .pl-column-week .pl-tomorrow::before {
+  content: '来週';
+}
+/* 時間軸のやることの日付（名前の右の小さな「11/24（火）」。押すとカレンダー） */
+.planner .pl-due-inline {
+  width: auto;
+}
+.planner .pl-due-inline .pl-due-button {
+  width: auto;
+  padding: 0 6px;
+  font-size: 10.5px;
+  line-height: 16px;
+}
+.planner .pl-due-hidden {
+  width: 0;
+  overflow: hidden;
+}
+/* ─── スマホ: 上で横にすべらせて選ぶチップ（列へ・プロジェクトへ移動） ─── */
+.planner .pl-jump {
+  display: none;
+  position: sticky;
+  top: var(--pl-sticky-top, 0px);
+  z-index: 15;
+  border-bottom: 1px solid var(--pl-border);
+  background: color-mix(in srgb, var(--pl-page-bg) 92%, transparent);
+  backdrop-filter: blur(8px);
+}
+@media (max-width: 900px) {
+.planner .pl-jump-board {
+    display: block;
+  }
+}
+@media (max-width: 640px) {
+.planner .pl-jump-projects {
+    display: block;
+  }
+}
+.planner .pl-jump ul {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 16px;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.planner .pl-jump ul::-webkit-scrollbar {
+  display: none;
+}
+.planner .pl-jump li {
+  flex-shrink: 0;
+}
+.planner .pl-jump-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 12rem;
+  padding: 4px 12px;
+  border: 1px solid var(--pl-border);
+  border-radius: 999px;
+  background: var(--pl-panel);
+  color: var(--pl-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.planner .pl-jump-chip[aria-current='true'] {
+  border-color: var(--pl-accent);
+  background: color-mix(in srgb, var(--pl-accent) 16%, transparent);
+  font-weight: 600;
+}
+.planner .pl-jump-chip:focus-visible {
+  outline: 2px solid var(--pl-accent);
+  outline-offset: 1px;
+}
+.planner .pl-jump-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 移動したとき、見出しとチップの下に隠れないように */
+.planner .pl-project {
+  scroll-margin-top: calc(var(--pl-sticky-top, 0px) + 56px);
+}
+/* ─── テーマの中のプロジェクト ─── */
+.planner .pl-subproject {
+  margin: 10px 0 0;
+  padding: 8px 6px 4px 10px;
+  border-left: 3px solid color-mix(in srgb, var(--pl-cc, var(--pl-accent)) 55%, transparent);
+  border-radius: 0 10px 10px 0;
+  background: var(--pl-panel-2);
+}
+.planner .pl-subproject:has(> .pl-subproject-header .pl-dot) {
+  --pl-cc: inherit;
+}
+.planner .pl-subproject-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px 4px;
+}
+.planner .pl-subproject-header h3 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.planner .pl-subproject-header .pl-grip {
+  margin-left: -4px;
+}
+.planner .pl-subproject .pl-block-title {
+  font-size: 10.5px;
+}
+.planner .pl-subproject-new {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.planner .pl-subproject-add {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--pl-muted);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.planner .pl-subproject-add svg {
+  width: 14px;
+  height: 14px;
+}
+.planner .pl-subproject-add:hover {
+  color: var(--pl-text);
+}
+/* 毎月の「その日」を選ぶ欄（ルーチン目標） */
+.planner .pl-select-day {
+  max-width: 6.5em;
+}
+.planner .pl-project .pl-habit > .pl-select-day {
+  margin-top: -3px;
+}
+/* ─── 時間軸: 見出しを押すと、その列を広げて全文を出す ─── */
+.planner .pl-column-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.planner .pl-column-toggle:focus-visible {
+  outline: 2px solid var(--pl-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.planner .pl-column-toggle .pl-wide-mark {
+  align-self: center;
+  width: 14px;
+  height: 14px;
+  color: var(--pl-muted);
+}
+/* 時間軸でも、名前は折り返して全部出す（印・日付が入りきらなければ次の行へ） */
+.planner .pl-column .pl-title-button.pl-task-title {
+  align-items: flex-start;
+  overflow: visible;
+}
+.planner .pl-column .pl-title-text {
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+.planner .pl-column .pl-task,
+.planner .pl-column .pl-habit {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  row-gap: 2px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+.planner .pl-column .pl-task > .pl-title-button,
+.planner .pl-column .pl-habit > .pl-title-button {
+  flex: 1 1 8em;
+  min-width: 8em;
+}
+/* 印・日付・ボタンは 1 行目の高さにそろえる */
+.planner .pl-column .pl-task > :not(.pl-title-button),
+.planner .pl-column .pl-habit > :not(.pl-title-button) {
+  margin-top: 1px;
+}
+.planner .pl-column .pl-title-wrap .pl-note-mark,
+.planner .pl-column .pl-title-button .pl-note-mark {
+  margin-top: 0.25em;
+}
+@media (max-width: 900px) {
+.planner .pl-board {
+    display: flex;
+  }
+.planner .pl-board > .pl-column {
+    flex: 0 0 86vw;
+    min-width: 0;
+  }
+.planner .pl-board > .pl-column-wide {
+    flex-basis: calc(100vw - 32px);
+  }
+}
+/* 時間軸: やることの名前も折り返す（プロジェクトは色の丸、日付は入りきらなければ次の行へ） */
+.planner .pl-column .pl-task-main {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  row-gap: 2px;
+}
+.planner .pl-column .pl-task-main > .pl-title-button {
+  flex: 1 1 8em;
+  min-width: 8em;
+}
+.planner .pl-title-button > .pl-pdot {
+  align-self: flex-start;
+  margin: 6px 5px 0 0;
+}
+.planner .pl-column .pl-task-meta {
+  margin-top: 0;
+}
+/* プロジェクトの期日目標: チェックと日付を詰めて、名前を左から始める。日付ははっきり・小さく */
+.planner .pl-project .pl-goal {
+  gap: 4px;
+}
+.planner .pl-project .pl-goal > .pl-due {
+  width: auto;
+  min-width: 2.2rem;
+  margin-top: 0;
+  margin-right: 3px;
+}
+.planner .pl-project .pl-goal .pl-due-button {
+  padding: 0 2px;
+  background: transparent;
+  color: var(--pl-text);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 17px;
+  letter-spacing: -0.01em;
+  text-align: right;
+  /* 名前（13.5px）の字の並びにそろえる */
+  position: relative;
+  top: -0.5px;
+}
+.planner .pl-project .pl-goal .pl-due-soon .pl-due-button {
+  color: var(--pl-warning);
+}
+.planner .pl-project .pl-goal .pl-done .pl-due-button,
+.planner .pl-project .pl-done .pl-due-button {
+  color: var(--pl-muted);
+  font-weight: 400;
+}
+/* 日付の無いもの: 小さなカレンダーの印だけ（押すと日付を選べる） */
+.planner .pl-project .pl-goal .pl-due-empty .pl-due-button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  border: 0;
+  color: var(--pl-muted);
+  opacity: 0.55;
+}
+.planner .pl-project .pl-goal .pl-due-empty .pl-due-button:hover {
+  opacity: 1;
+}
+.planner .pl-due-button svg {
+  width: 13px;
+  height: 13px;
+}
+/* 日付の無いものは、行をつかんで並べ替えられる */
+.planner .pl-goal-free {
+  cursor: grab;
+  touch-action: pan-y;
+}
+.planner .pl-goal-free.pl-dragging {
+  cursor: grabbing;
+  background: var(--pl-panel-2);
+}
+/* プロジェクトのカード: 列ごとに上から詰める（段の高さをそろえないので、低いカードの下が空かない） */
+.planner .pl-projects {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.planner .pl-projects-col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* テーマの、まだ何も無い自分の目標（1 行にたたんだもの） */
+.planner .pl-own-add {
+  margin-top: 0;
+}
+/* プロジェクトのカードをドラッグするとき（落とす先の線・列の下の受け皿は <CardBoard> が描く） */
+.planner .pl-project.pl-dragging {
+  opacity: 0.6;
+}
+/* 毎年の「その日」: 月と日の 2 つを並べる */
+.planner .pl-when-year {
+  display: inline-flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.planner .pl-project .pl-habit > .pl-when-year {
+  margin-top: -3px;
+}
+/* 足す欄: 書いているときだけ「追加」のボタン */
+.planner .pl-add-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.planner .pl-add-line .pl-add-input {
+  flex: 1;
+  min-width: 0;
+}
+.planner .pl-add-submit {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--pl-accent);
+  color: var(--pl-accent-text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.planner .pl-add-submit:focus-visible {
+  outline: 2px solid var(--pl-accent);
+  outline-offset: 2px;
+}

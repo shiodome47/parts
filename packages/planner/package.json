@@ -1,7 +1,7 @@
 {
   "name": "@shiodome47/planner",
-  "version": "0.1.0",
-  "description": "時間軸（今日・今週・数か月・今年）とプロジェクトの部品。まずは土台（データの形と決まりごと。画面なし）から",
+  "version": "0.2.0",
+  "description": "時間軸（今日・今週・数か月・今年）とプロジェクトの部品。土台（データの形と決まりごと）と、時間軸・プロジェクトの画面（React）",
   "keywords": [
     "planner",
     "todo",
@@ -27,9 +27,20 @@
     "./core": {
       "types": "./dist/core/index.d.ts",
       "import": "./dist/core.js"
-    }
+    },
+    "./timeline": {
+      "types": "./dist/timeline/index.d.ts",
+      "import": "./dist/timeline.js"
+    },
+    "./projects": {
+      "types": "./dist/projects/index.d.ts",
+      "import": "./dist/projects.js"
+    },
+    "./style.css": "./dist/style.css"
   },
-  "sideEffects": false,
+  "sideEffects": [
+    "**/*.css"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -39,5 +50,16 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "linkshelf": "^0.9.1",
+    "lucide-react": "^1.73.0"
   }
 }
