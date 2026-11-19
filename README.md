@@ -5,6 +5,7 @@ shiodome47 のアプリで使い回す、共通部品の置き場です。部品
 | 部品 | 中身 |
 |---|---|
 | [`@shiodome47/planner`](packages/planner) | 時間軸とプロジェクト。土台（`/core`：データの形と決まりごと）と、画面（`/timeline`・`/projects`） |
+| [`@shiodome47/vision-board`](packages/vision-board) | 宝地図（ビジョンボード）。画像と言葉を貼り、拡大して見たいところを覚える |
 
 カードを並べる棚と `<CardBoard>` は、別のパッケージ [linkshelf](https://github.com/shiodome47/linkshelf) にあります。
 
@@ -28,6 +29,8 @@ npm run build
 ```bash
 npm publish -w @shiodome47/planner
 ```
+
+（宝地図なら `npm publish -w @shiodome47/vision-board`）
 
 ## License
 
