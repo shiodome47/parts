@@ -560,16 +560,3 @@
   border-radius: 3px;
   background: rgb(0 0 0 / 0.35);
 }
-.vision-board .vb-vision-length {
-  justify-content: center;
-  margin-top: 8px;
-}
-.vision-board .vb-vision-length .vb-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.vision-board .vb-vision-length svg {
-  width: 16px;
-  height: 16px;
-}

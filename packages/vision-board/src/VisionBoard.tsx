@@ -1,4 +1,4 @@
-import { ArrowDownToLine, ArrowUpToLine, FoldVertical, BookmarkPlus, BringToFront, Check, ChevronsDown, ChevronsLeft, ChevronsUp, Menu, ImagePlus, Maximize2, Minimize2, Minus, MoveHorizontal, Pencil, Plus, RotateCcw, RotateCw, SendToBack, Shrink, Trash2, Type, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpToLine, FoldVertical, Undo2, BookmarkPlus, BringToFront, Check, ChevronsDown, ChevronsLeft, ChevronsUp, Menu, ImagePlus, Maximize2, Minimize2, Minus, MoveHorizontal, Pencil, Plus, RotateCcw, RotateCw, SendToBack, Shrink, Trash2, Type, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { VisionBoard, VisionItem } from './types'
 import { addItem, addView, boardLength, boardRatio, byLayer, growBoard, moveLayer, removeItem, removeView, setAspect, shrinkBoard, trimBoard, updateItem, viewToZoom } from './board'
@@ -145,10 +145,39 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
   const drag = useRef<Drag | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
+  // 元に戻す（この画面を開いているあいだ。変える前のボードを積んでおく）
+  const history = useRef<VisionBoard[]>([])
+  const [undoCount, setUndoCount] = useState(0)
   const save = (next: VisionBoard) => {
     setDraft(null)
+    history.current = [...history.current.slice(-49), latest.current]
+    setUndoCount(history.current.length)
     void onChange(next)
   }
+  const undo = () => {
+    const prev = history.current.pop()
+    setUndoCount(history.current.length)
+    if (!prev) return
+    setDraft(null)
+    drag.current = null
+    // 同期で新しい方が勝つように、時刻は今に
+    void onChange({ ...prev, updatedAt: new Date().toISOString() })
+  }
+  const undoRef = useRef(undo)
+  undoRef.current = undo
+  // Ctrl＋Z（Mac は ⌘Z）でも戻す（入力欄の中は除く）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'z') return
+      const t = e.target as HTMLElement | null
+      if (t?.closest('input, textarea, select, [contenteditable="true"]') || document.querySelector('dialog[open]')) return
+      if (history.current.length === 0) return
+      e.preventDefault()
+      undoRef.current()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
 
   useEffect(() => {
     const el = boxRef.current
@@ -444,6 +473,12 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
           {editing ? <Check aria-hidden="true" /> : <Pencil aria-hidden="true" />}
           {!iconOnly && (editing ? '完了' : '編集')}
         </button>
+        {undoCount > 0 && (
+          <button type="button" className="vb-button" onClick={undo} aria-label="元に戻す" title="ひとつ前に戻す（Ctrl＋Z）">
+            <Undo2 aria-hidden="true" />
+            {!iconOnly && '元に戻す'}
+          </button>
+        )}
         <button type="button" className="vb-button" onClick={enterFull} aria-label="全画面" title="宝地図だけを、画面いっぱいに">
           <Maximize2 aria-hidden="true" />
           {!iconOnly && '全画面'}
@@ -495,6 +530,37 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
               <option value="cork">背景: コルク</option>
               <option value="night">背景: 夜空</option>
             </select>
+            {/* 下へ伸びるボード: 高さを変える（道具の行に置く。スマホでも見えるように） */}
+            {scroll && (
+              <>
+                <button type="button" className="vb-button" onClick={() => apply(growBoard(board, growStep(), new Date()))} aria-label="下に広げる" title="宝地図の下に、空きを足す">
+                  <ArrowDownToLine aria-hidden="true" />
+                  {!iconOnly && '下に広げる'}
+                </button>
+                <button
+                  type="button"
+                  className="vb-button"
+                  disabled={!canTrim}
+                  onClick={() => apply(shrinkBoard(board, growStep(), new Date()))}
+                  aria-label="下を詰める"
+                  title="宝地図の下の空きを詰める（貼ったものは切らない）"
+                >
+                  <ArrowUpToLine aria-hidden="true" />
+                  {!iconOnly && '下を詰める'}
+                </button>
+                <button
+                  type="button"
+                  className="vb-button"
+                  disabled={!canTrim}
+                  onClick={() => apply(trimBoard(board, new Date()))}
+                  aria-label="下の空きをなくす"
+                  title="宝地図の下の空きを、一度になくす（いちばん下に貼ったものの、少し下まで。貼ったものは切らない）"
+                >
+                  <FoldVertical aria-hidden="true" />
+                  {!iconOnly && '下の空きをなくす'}
+                </button>
+              </>
+            )}
           </>
         )}
         {error && (
@@ -726,31 +792,6 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
         </div>
       </div>
       </div>
-      {editing && scroll && (
-        <div className="vb-row vb-vision-length">
-          <button type="button" className="vb-button" onClick={() => apply(growBoard(board, growStep(), new Date()))} title="宝地図の下に、空きを足す">
-            <ArrowDownToLine aria-hidden="true" /> 下に広げる
-          </button>
-          <button
-            type="button"
-            className="vb-button"
-            disabled={!canTrim}
-            onClick={() => apply(shrinkBoard(board, growStep(), new Date()))}
-            title="宝地図の下の空きを詰める（貼ったものは切らない）"
-          >
-            <ArrowUpToLine aria-hidden="true" /> 下を詰める
-          </button>
-          <button
-            type="button"
-            className="vb-button"
-            disabled={!canTrim}
-            onClick={() => apply(trimBoard(board, new Date()))}
-            title="宝地図の下の空きを、一度になくす（いちばん下に貼ったものの、少し下まで。貼ったものは切らない）"
-          >
-            <FoldVertical aria-hidden="true" /> 下の空きをなくす
-          </button>
-        </div>
-      )}
       {editing && <p className="vb-note vb-vision-hint">ドラッグで動かす・右下の丸で大きさ・上の道具で傾き・重なり・はがす。指で広げると拡大できます。終わったら「完了」。</p>}
 
       <Dialog open={viewing !== null} onClose={() => setViewing(null)} title="宝地図" wide>
