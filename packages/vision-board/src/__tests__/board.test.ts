@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_LENGTH, addItem, addView, boardLength, boardRatio, byLayer, contentBottom, emptyBoard, getBoard, growBoard, moveLayer, removeItem, removeView, setAspect, setLength, shrinkBoard, updateItem, viewToZoom } from '../board'
+import { MAX_LENGTH, addItem, addView, boardLength, boardRatio, byLayer, contentBottom, emptyBoard, getBoard, growBoard, moveLayer, removeItem, removeView, setAspect, setLength, shrinkBoard, trimBoard, updateItem, viewToZoom } from '../board'
 import type { VisionBoard } from '../types'
 
 const NOW = new Date(2026, 10, 18, 9, 0)
@@ -125,6 +125,8 @@ describe('下へ伸びるボード', () => {
     // 画像の下（0.15 + 0.3）より少し下まで
     expect(boardLength(s)).toBeCloseTo(0.2 * 0.75 + 0.3 + 0.05)
     expect(contentBottom(s)).toBeLessThan(boardLength(s))
+    // 一度になくす: 少しずつ詰めたときと同じところまで
+    expect(boardLength(trimBoard(b, T))).toBeCloseTo(boardLength(s))
     expect(setLength(withItems(), 3, T).length).toBeUndefined()
     expect(boardLength(setLength(b, 999, T))).toBe(MAX_LENGTH)
   })
