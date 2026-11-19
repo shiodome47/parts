@@ -73,6 +73,11 @@ export interface ZoomOptions {
   onDouble?: () => void
   /** 枠（w×h）の中の、中身の大きさ（倍率 1 のとき）。省けば枠と同じ */
   contentSize?: (w: number, h: number) => { w: number; h: number }
+  /**
+   * true のとき、ふつうのホイール（トラックパッドの 2 本指）で、はみ出した中身を上下左右に動かす
+   * （端まで来たら、ページのスクロールに渡す）。下へ伸びるボードで使う
+   */
+  wheelPan?: () => boolean
 }
 
 /**
@@ -119,7 +124,18 @@ export function useZoom(boxRef: RefObject<HTMLElement | null>, canPan: (target: 
     },
     [boxRef, setZoom, dims],
   )
-  const reset = useCallback(() => setZoom(ONE), [setZoom])
+  /** 倍率 1 に戻す（枠の真ん中を中心に。中身が枠より大きいとき＝下へ伸びるボードは、今見ているあたりのまま） */
+  const reset = useCallback(() => {
+    const box = boxRef.current
+    if (!box) return setZoom(ONE)
+    setZoom(zoomAt(zoomRef.current, 1, box.clientWidth / 2, box.clientHeight / 2, ...dims()))
+  }, [boxRef, setZoom, dims])
+  /** 中身が枠からはみ出している（動かして見られる） */
+  const overflows = useCallback(() => {
+    const [w, h, cw, ch] = dims()
+    const s = zoomRef.current.scale
+    return cw * s > w + 1 || ch * s > h + 1
+  }, [dims])
 
   useEffect(() => {
     const box = boxRef.current
@@ -133,7 +149,7 @@ export function useZoom(boxRef: RefObject<HTMLElement | null>, canPan: (target: 
     const doubleTarget = (target: EventTarget | null, px: number, py: number): Zoom => {
       optionsRef.current.onDouble?.()
       const z = zoomRef.current
-      if (z.scale > 1) return ONE
+      if (z.scale > 1) return zoomAt(z, 1, px, py, ...dims())
       const r = optionsRef.current.focusRect?.(target)
       if (r) {
         const b = box.getBoundingClientRect()
@@ -174,7 +190,7 @@ export function useZoom(boxRef: RefObject<HTMLElement | null>, canPan: (target: 
         }
         lastTap = now
         movedRef.current = false
-        if (zoomRef.current.scale > 1 && canPanRef.current(e.target)) pan = { x0: t.clientX, y0: t.clientY, z0: zoomRef.current }
+        if (overflows() && canPanRef.current(e.target)) pan = { x0: t.clientX, y0: t.clientY, z0: zoomRef.current }
       }
     }
     const onTouchMove = (e: TouchEvent) => {
@@ -201,7 +217,17 @@ export function useZoom(boxRef: RefObject<HTMLElement | null>, canPan: (target: 
 
     // ─── PC: トラックパッドのピンチ・Ctrl＋ホイール ───
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey) return
+      if (!e.ctrlKey) {
+        if (!optionsRef.current.wheelPan?.() || !overflows()) return
+        const z = zoomRef.current
+        const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? box.clientHeight : 1
+        const next = clampZoom({ ...z, x: z.x - e.deltaX * unit, y: z.y - e.deltaY * unit }, ...dims())
+        // 端まで来ていたら、ページのスクロールに任せる
+        if (Math.abs(next.x - z.x) < 0.5 && Math.abs(next.y - z.y) < 0.5) return
+        e.preventDefault()
+        setZoom(next)
+        return
+      }
       e.preventDefault()
       const p = local(e.clientX, e.clientY)
       const z = zoomRef.current
@@ -211,7 +237,7 @@ export function useZoom(boxRef: RefObject<HTMLElement | null>, canPan: (target: 
     // ─── PC: 拡大中はマウスでドラッグして動かす・ダブルクリックで拡大／元に戻す ───
     let mouse: { x0: number; y0: number; z0: Zoom } | null = null
     const onMouseDown = (e: MouseEvent) => {
-      if (e.button !== 0 || zoomRef.current.scale <= 1 || !canPanRef.current(e.target)) return
+      if (e.button !== 0 || !overflows() || !canPanRef.current(e.target)) return
       mouse = { x0: e.clientX, y0: e.clientY, z0: zoomRef.current }
       movedRef.current = false
     }
@@ -251,7 +277,7 @@ export function useZoom(boxRef: RefObject<HTMLElement | null>, canPan: (target: 
       window.removeEventListener('mouseup', onMouseUp)
       box.removeEventListener('dblclick', onDblClick)
     }
-  }, [boxRef, setZoom])
+  }, [boxRef, setZoom, dims, overflows])
 
   // 枠の大きさが変わったら（画面の向きなど）、はみ出しを直す
   useEffect(() => {

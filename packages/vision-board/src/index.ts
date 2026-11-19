@@ -10,6 +10,15 @@ export type { LoadImage } from './BoardImage'
 export type { VisionBoard as VisionBoardData, VisionItem, VisionView } from './types'
 export {
   ASPECT_RATIO,
+  MIN_LENGTH,
+  MAX_LENGTH,
+  boardLength,
+  boardRatio,
+  setAspect,
+  setLength,
+  growBoard,
+  shrinkBoard,
+  contentBottom,
   BOARD_ID,
   emptyBoard,
   getBoard,

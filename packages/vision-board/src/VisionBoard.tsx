@@ -1,7 +1,7 @@
-import { BookmarkPlus, BringToFront, Check, ChevronsDown, ChevronsLeft, ChevronsUp, Menu, ImagePlus, Maximize2, Minimize2, Minus, MoveHorizontal, Pencil, Plus, RotateCcw, RotateCw, SendToBack, Shrink, Trash2, Type, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpToLine, BookmarkPlus, BringToFront, Check, ChevronsDown, ChevronsLeft, ChevronsUp, Menu, ImagePlus, Maximize2, Minimize2, Minus, MoveHorizontal, Pencil, Plus, RotateCcw, RotateCw, SendToBack, Shrink, Trash2, Type, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { VisionBoard, VisionItem } from './types'
-import { ASPECT_RATIO, addItem, addView, byLayer, moveLayer, removeItem, removeView, updateItem, viewToZoom } from './board'
+import { addItem, addView, boardLength, boardRatio, byLayer, contentBottom, growBoard, moveLayer, removeItem, removeView, setAspect, shrinkBoard, updateItem, viewToZoom } from './board'
 import { safeLocalStore } from './storage'
 import { Dialog } from './Dialog'
 import { BoardImage, type LoadImage } from './BoardImage'
@@ -100,12 +100,16 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
     openTimer.current = null
   }
   const ratioRef = useRef(1)
+  const scrollRef = useRef(false)
   const { zoom, zoomBy, reset, setZoom, dims, moved } = useZoom(boxRef, (target) => !editing || !(target instanceof Element && target.closest('.vb-vision-item')), {
     // 見るとき、画像・言葉を 2 回たたくと、それが画面いっぱいに見えるように寄る
     focusRect: (target) => (!editing && target instanceof Element ? (target.closest('.vb-vision-item')?.getBoundingClientRect() ?? null) : null),
     onDouble: cancelOpen,
+    // 下へ伸びるボードは、ふつうのホイール（トラックパッドの 2 本指）で上下に動かす
+    wheelPan: () => scrollRef.current,
     // 見える枠は使える場所いっぱい。ボードはその中に収めて真ん中に置く（拡大すると、左右・上下の余白まで広がる）
-    contentSize: (w, h) => fitBoard(w, h, ratioRef.current),
+    // 下へ伸びるボードは、幅いっぱい（枠より高い分は、ホイール・指・ドラッグで下へ動かして見る）
+    contentSize: (w, h) => (scrollRef.current ? { w, h: w / ratioRef.current } : fitBoard(w, h, ratioRef.current)),
   })
   // 全画面（見出しや道具を隠して、宝地図だけを大きく）
   const rootRef = useRef<HTMLDivElement>(null)
@@ -157,9 +161,11 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
     return () => ro.disconnect()
   }, [])
 
-  const ratio = ASPECT_RATIO[board.aspect]
+  const ratio = boardRatio(board)
   ratioRef.current = ratio
-  const content = fitBoard(frame.w, frame.h, ratio)
+  const scroll = board.aspect === 'scroll'
+  scrollRef.current = scroll
+  const content = scroll ? { w: frame.w, h: frame.w / ratio } : fitBoard(frame.w, frame.h, ratio)
   const width = content.w
   // ボードより上にあるもの（見出し・道具・見え方の帯）の高さを測って、残りの高さいっぱいに使う
   const [reserve, setReserve] = useState(190)
@@ -180,6 +186,14 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
       document.removeEventListener('fullscreenchange', later)
     }
   })
+
+  // 下へ伸びるボードが枠より高い（下へ動かして見る）
+  const overflowY = scroll && content.h > frame.h + 1
+  // ボードの高さが変わったら（下に広げる・詰める）、はみ出しを直す
+  useEffect(() => {
+    setZoom(zoom)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content.h])
 
   // 枠いっぱいにするときの倍率（ボードの形と画面の形が同じなら 1 = 出さない）
   const cover = coverScale(frame.w, frame.h, content.w, content.h)
@@ -248,6 +262,20 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
     setFill(false)
   }
 
+  /**
+   * 新しく貼るものの位置。下へ伸びるボードでは、今見ているあたりに置く（ほかは、いつもの左上から少しずつずらす）
+   */
+  const placeNew = (b: VisionBoard): Partial<VisionItem> => {
+    const [, h, , ch] = dims()
+    if (b.aspect !== 'scroll' || !ch) return {}
+    // 枠の中に見えているところ（ボードの高さに対する割合）
+    const all = ch * zoom.scale
+    const top = Math.min(0.95, Math.max(0, -zoom.y / all))
+    const seen = Math.min(1 - top, h / all)
+    const n = b.items.length % 6
+    return { y: top + seen * (0.08 + n * 0.06) }
+  }
+
   const addImages = async (files: File[]) => {
     const list = files.filter((f) => IMAGE_TYPES.includes(f.type))
     if (list.length === 0) return
@@ -258,7 +286,7 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
       let next = latest.current
       for (const f of list) {
         const url = await uploadImage(f)
-        next = addItem(next, { kind: 'image', url: new URL(url, location.href).toString() }, new Date())
+        next = addItem(next, { kind: 'image', url: new URL(url, location.href).toString(), ...placeNew(next) }, new Date())
       }
       save(next)
       setEditing(true)
@@ -316,6 +344,12 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
     if (draft) save(draft)
   }
 
+  /** 下に広げる・詰める量（幅に対する割合）。見える枠の高さの 3/4 くらいずつ */
+  const growStep = () => {
+    const w = frame.w || 1
+    return Math.max(0.25, Math.min(2, ((frame.h || w) * 0.75) / w))
+  }
+
   const sel = board.items.find((i) => i.id === selected) ?? null
   const apply = (next: VisionBoard) => save(next)
 
@@ -357,8 +391,8 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
       <button
         type="button"
         className="vb-vision-view vb-vision-view-add"
-        disabled={zoom.scale <= 1}
-        title={zoom.scale <= 1 ? '拡大して見たいところを出してから、覚えられます' : '今の拡大と位置を、名前を付けて覚える'}
+        disabled={zoom.scale <= 1 && !(overflowY && zoom.y < -1)}
+        title={zoom.scale <= 1 && !(overflowY && zoom.y < -1) ? '拡大して見たいところを出してから、覚えられます' : '今の拡大と位置を、名前を付けて覚える'}
         aria-label="この見え方を覚える"
         onClick={() => setNaming('')}
       >
@@ -439,11 +473,15 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
               className="vb-select"
               aria-label="ボードの形"
               value={board.aspect}
-              onChange={(e) => apply({ ...board, aspect: e.target.value as VisionBoard['aspect'], updatedAt: new Date().toISOString() })}
+              onChange={(e) => {
+                apply(setAspect(board, e.target.value as VisionBoard['aspect'], new Date()))
+                reset()
+              }}
             >
               <option value="landscape">横長</option>
               <option value="portrait">縦長</option>
               <option value="square">正方形</option>
+              <option value="scroll">下へ伸びる</option>
             </select>
             <select
               className="vb-select"
@@ -564,7 +602,7 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
       )}
       <div
         ref={boxRef}
-        className={`vb-vision-board${editing ? ' vb-vision-editing' : ''}${zoom.scale > 1 ? ' vb-vision-zoomed' : ''}`}
+        className={`vb-vision-board${editing ? ' vb-vision-editing' : ''}${zoom.scale > 1 || overflowY ? ' vb-vision-zoomed' : ''}`}
         style={{
           // 見える枠は、使える場所いっぱい（見出しと道具の分をのぞいた高さ）。ボードはこの中に収めて真ん中に置く
           height: `max(240px, calc(100dvh - ${reserve}px))`,
@@ -659,6 +697,17 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
           </div>
         ))}
         </div>
+        {/* 下へ伸びるボード: 今どのあたりを見ているか（右のふち） */}
+        {overflowY && (
+          <div className="vb-vision-scrollbar" aria-hidden="true">
+            <div
+              style={{
+                top: `${(Math.max(0, -zoom.y) / (content.h * zoom.scale)) * 100}%`,
+                height: `${Math.min(1, frame.h / (content.h * zoom.scale)) * 100}%`,
+              }}
+            />
+          </div>
+        )}
         {/* 拡大・縮小（指で広げる・2 回たたく・PC はトラックパッドのピンチや Ctrl＋ホイールでも） */}
         <div className="vb-vision-zoom" onPointerDown={(e) => e.stopPropagation()}>
           <button type="button" className="vb-icon-button" aria-label="拡大" title="拡大" onClick={() => zoomBy(1.5)}>
@@ -675,6 +724,22 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
         </div>
       </div>
       </div>
+      {editing && scroll && (
+        <div className="vb-row vb-vision-length">
+          <button type="button" className="vb-button" onClick={() => apply(growBoard(board, growStep(), new Date()))} title="宝地図の下に、空きを足す">
+            <ArrowDownToLine aria-hidden="true" /> 下に広げる
+          </button>
+          <button
+            type="button"
+            className="vb-button"
+            disabled={boardLength(board) - contentBottom(board) < 0.1}
+            onClick={() => apply(shrinkBoard(board, growStep(), new Date()))}
+            title="宝地図の下の空きを詰める（貼ったものは切らない）"
+          >
+            <ArrowUpToLine aria-hidden="true" /> 下を詰める
+          </button>
+        </div>
+      )}
       {editing && <p className="vb-note vb-vision-hint">ドラッグで動かす・右下の丸で大きさ・上の道具で傾き・重なり・はがす。指で広げると拡大できます。終わったら「完了」。</p>}
 
       <Dialog open={viewing !== null} onClose={() => setViewing(null)} title="宝地図" wide>
@@ -722,7 +787,7 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
               e.preventDefault()
               const text = writing.text.trim()
               if (!text) return setWriting(null)
-              const next = writing.id ? updateItem(board, writing.id, { text }, new Date()) : addItem(board, { kind: 'text', text }, new Date())
+              const next = writing.id ? updateItem(board, writing.id, { text }, new Date()) : addItem(board, { kind: 'text', text, ...placeNew(board) }, new Date())
               apply(next)
               setWriting(null)
               setEditing(true)

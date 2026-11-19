@@ -8,10 +8,23 @@ import type { VisionBoard, VisionItem, VisionView } from './types'
 export const BOARD_ID = 'main'
 
 /** ボードの縦横比（幅 / 高さ） */
-export const ASPECT_RATIO: Record<VisionBoard['aspect'], number> = {
+export const ASPECT_RATIO: Record<Exclude<VisionBoard['aspect'], 'scroll'>, number> = {
   landscape: 4 / 3,
   portrait: 3 / 4,
   square: 1,
+}
+
+/** 下へ伸びるボードの高さ（幅に対する割合）の、いちばん短い・長い */
+export const MIN_LENGTH = 0.5
+export const MAX_LENGTH = 30
+/** 下へ伸びるボードの高さ（まだ決めていなければ、横長と同じ） */
+export function boardLength(board: VisionBoard): number {
+  if (board.aspect !== 'scroll') return 1 / ASPECT_RATIO[board.aspect]
+  return Math.min(MAX_LENGTH, Math.max(MIN_LENGTH, board.length ?? 1 / ASPECT_RATIO.landscape))
+}
+/** ボードの幅 ÷ 高さ */
+export function boardRatio(board: VisionBoard): number {
+  return 1 / boardLength(board)
 }
 
 /** 空の新しいボード（横長・紙） */
@@ -132,4 +145,59 @@ export function viewToZoom(view: VisionView, frameW: number, frameH: number, boa
   const cx = view.cx ?? (0.5 - view.x) / view.scale
   const cy = view.cy ?? (0.5 - view.y) / view.scale
   return { scale: view.scale, x: frameW / 2 - cx * boardW * view.scale, y: frameH / 2 - cy * boardH * view.scale }
+}
+
+// ─── 下へ伸びるボード ───
+
+/**
+ * ボードの形を変える。下へ伸びるボードにするときは、今の並びのまま（高さを今の形に合わせる）
+ */
+export function setAspect(board: VisionBoard, aspect: VisionBoard['aspect'], now: Date): VisionBoard {
+  if (aspect === board.aspect) return board
+  const next: VisionBoard = { ...board, aspect, updatedAt: now.toISOString() }
+  if (aspect === 'scroll') next.length = boardLength(board)
+  return next
+}
+
+/**
+ * 下へ伸びるボードの高さを変える（幅に対する割合）。
+ * 位置は高さに対する割合なので、貼ったもの・覚えた見え方の上下の位置を直して、見た目の場所は動かさない
+ */
+export function setLength(board: VisionBoard, length: number, now: Date): VisionBoard {
+  const old = boardLength(board)
+  const len = Math.min(MAX_LENGTH, Math.max(MIN_LENGTH, length))
+  if (board.aspect !== 'scroll' || Math.abs(len - old) < 1e-9) return board
+  const f = old / len
+  return {
+    ...board,
+    length: len,
+    items: board.items.map((i) => ({ ...i, y: i.y * f })),
+    ...(board.views
+      ? {
+          views: board.views.map((v) => {
+            const cx = v.cx ?? (0.5 - v.x) / v.scale
+            const cy = (v.cy ?? (0.5 - v.y) / v.scale) * f
+            return { ...v, cx, cy, x: 0.5 - cx * v.scale, y: 0.5 - cy * v.scale }
+          }),
+        }
+      : {}),
+    updatedAt: now.toISOString(),
+  }
+}
+
+/** 貼ったもののいちばん下（幅に対する割合。画像は高さがわからないので、幅と同じくらいと見る） */
+export function contentBottom(board: VisionBoard): number {
+  const len = boardLength(board)
+  return Math.max(0, ...board.items.map((i) => i.y * len + (i.kind === 'image' ? i.w : (i.size ?? 0.05) * 2.5)))
+}
+
+/** 下へ広げる（step は幅に対する割合） */
+export function growBoard(board: VisionBoard, step: number, now: Date): VisionBoard {
+  return setLength(board, boardLength(board) + step, now)
+}
+
+/** 下を詰める（貼ったものは切らない。step は幅に対する割合）。もう詰められなければ、そのまま返す */
+export function shrinkBoard(board: VisionBoard, step: number, now: Date): VisionBoard {
+  const min = Math.max(MIN_LENGTH, contentBottom(board) + 0.05)
+  return setLength(board, Math.max(min, boardLength(board) - step), now)
 }

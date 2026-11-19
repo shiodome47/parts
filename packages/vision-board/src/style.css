@@ -540,3 +540,36 @@
   background: var(--vb-panel);
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.2);
 }
+/* ─── 下へ伸びるボード ─── */
+.vision-board .vb-vision-scrollbar {
+  position: absolute;
+  top: 6px;
+  right: 3px;
+  bottom: 6px;
+  z-index: 4;
+  width: 5px;
+  border-radius: 3px;
+  background: rgb(0 0 0 / 0.08);
+  pointer-events: none;
+}
+.vision-board .vb-vision-scrollbar > div {
+  position: absolute;
+  left: 0;
+  right: 0;
+  min-height: 16px;
+  border-radius: 3px;
+  background: rgb(0 0 0 / 0.35);
+}
+.vision-board .vb-vision-length {
+  justify-content: center;
+  margin-top: 8px;
+}
+.vision-board .vb-vision-length .vb-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.vision-board .vb-vision-length svg {
+  width: 16px;
+  height: 16px;
+}
