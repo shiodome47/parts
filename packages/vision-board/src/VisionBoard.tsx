@@ -1,7 +1,7 @@
-import { ArrowDownToLine, ArrowUpToLine, BookmarkPlus, BringToFront, Check, ChevronsDown, ChevronsLeft, ChevronsUp, Menu, ImagePlus, Maximize2, Minimize2, Minus, MoveHorizontal, Pencil, Plus, RotateCcw, RotateCw, SendToBack, Shrink, Trash2, Type, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpToLine, FoldVertical, BookmarkPlus, BringToFront, Check, ChevronsDown, ChevronsLeft, ChevronsUp, Menu, ImagePlus, Maximize2, Minimize2, Minus, MoveHorizontal, Pencil, Plus, RotateCcw, RotateCw, SendToBack, Shrink, Trash2, Type, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { VisionBoard, VisionItem } from './types'
-import { addItem, addView, boardLength, boardRatio, byLayer, contentBottom, growBoard, moveLayer, removeItem, removeView, setAspect, shrinkBoard, updateItem, viewToZoom } from './board'
+import { addItem, addView, boardLength, boardRatio, byLayer, growBoard, moveLayer, removeItem, removeView, setAspect, shrinkBoard, trimBoard, updateItem, viewToZoom } from './board'
 import { safeLocalStore } from './storage'
 import { Dialog } from './Dialog'
 import { BoardImage, type LoadImage } from './BoardImage'
@@ -344,6 +344,8 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
     if (draft) save(draft)
   }
 
+  // 下を詰められるか（貼ったものの少し下・いちばん短い高さ まで来ていたら、もう詰められない）
+  const canTrim = scroll && boardLength(trimBoard(board, new Date())) < boardLength(board) - 0.01
   /** 下に広げる・詰める量（幅に対する割合）。見える枠の高さの 3/4 くらいずつ */
   const growStep = () => {
     const w = frame.w || 1
@@ -732,11 +734,20 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
           <button
             type="button"
             className="vb-button"
-            disabled={boardLength(board) - contentBottom(board) < 0.1}
+            disabled={!canTrim}
             onClick={() => apply(shrinkBoard(board, growStep(), new Date()))}
             title="宝地図の下の空きを詰める（貼ったものは切らない）"
           >
             <ArrowUpToLine aria-hidden="true" /> 下を詰める
+          </button>
+          <button
+            type="button"
+            className="vb-button"
+            disabled={!canTrim}
+            onClick={() => apply(trimBoard(board, new Date()))}
+            title="宝地図の下の空きを、一度になくす（いちばん下に貼ったものの、少し下まで。貼ったものは切らない）"
+          >
+            <FoldVertical aria-hidden="true" /> 下の空きをなくす
           </button>
         </div>
       )}

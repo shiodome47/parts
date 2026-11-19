@@ -18,6 +18,7 @@ export {
   setLength,
   growBoard,
   shrinkBoard,
+  trimBoard,
   contentBottom,
   BOARD_ID,
   emptyBoard,

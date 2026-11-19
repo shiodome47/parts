@@ -196,6 +196,11 @@ export function growBoard(board: VisionBoard, step: number, now: Date): VisionBo
   return setLength(board, boardLength(board) + step, now)
 }
 
+/** 下の空きをなくす（いちばん下に貼ったものの、少し下まで一度に詰める） */
+export function trimBoard(board: VisionBoard, now: Date): VisionBoard {
+  return shrinkBoard(board, Infinity, now)
+}
+
 /** 下を詰める（貼ったものは切らない。step は幅に対する割合）。もう詰められなければ、そのまま返す */
 export function shrinkBoard(board: VisionBoard, step: number, now: Date): VisionBoard {
   const min = Math.max(MIN_LENGTH, contentBottom(board) + 0.05)
