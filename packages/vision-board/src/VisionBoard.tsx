@@ -218,11 +218,12 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
 
   // 下へ伸びるボードが枠より高い（下へ動かして見る）
   const overflowY = scroll && content.h > frame.h + 1
-  // ボードの高さが変わったら（下に広げる・詰める）、はみ出しを直す
+  // ボードの大きさが変わったら（形を変えた・元に戻した・下に広げる・詰める）、位置を合わせ直す。
+  // 横長 ↔ 縦長のように高さが同じで幅だけ変わることもあるので、幅も見る
   useEffect(() => {
     setZoom(zoom)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content.h])
+  }, [content.w, content.h])
 
   // 枠いっぱいにするときの倍率（ボードの形と画面の形が同じなら 1 = 出さない）
   const cover = coverScale(frame.w, frame.h, content.w, content.h)
