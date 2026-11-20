@@ -20,17 +20,20 @@ function clampAxis(pos: number, frame: number, content: number): number {
   return Math.min(0, Math.max(frame - content, pos))
 }
 
-/** 倍率を 1〜5 に。枠（w×h）の中で、中身（cw×ch。省けば枠と同じ）が、すき間を作らないように（小さいときは真ん中に） */
-export function clampZoom(z: Zoom, w: number, h: number, cw = w, ch = h): Zoom {
-  const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, z.scale))
+/**
+ * 倍率を min（既定 1）〜5 に。枠（w×h）の中で、中身（cw×ch。省けば枠と同じ）が、すき間を作らないように（小さいときは真ん中に）。
+ * min を 1 より小さくすると、中身を枠より小さく縮められる（下へ伸びるボードの全体を見るとき）
+ */
+export function clampZoom(z: Zoom, w: number, h: number, cw = w, ch = h, min = MIN_SCALE): Zoom {
+  const scale = Math.min(MAX_SCALE, Math.max(min, z.scale))
   return { scale, x: clampAxis(z.x, w, cw * scale), y: clampAxis(z.y, h, ch * scale) }
 }
 
 /** 枠の中の点（px, py）を動かさずに、倍率を next にする */
-export function zoomAt(z: Zoom, next: number, px: number, py: number, w: number, h: number, cw = w, ch = h): Zoom {
+export function zoomAt(z: Zoom, next: number, px: number, py: number, w: number, h: number, cw = w, ch = h, min = MIN_SCALE): Zoom {
   const cx = (px - z.x) / z.scale
   const cy = (py - z.y) / z.scale
-  return clampZoom({ scale: next, x: px - cx * next, y: py - cy * next }, w, h, cw, ch)
+  return clampZoom({ scale: next, x: px - cx * next, y: py - cy * next }, w, h, cw, ch, min)
 }
 
 /** 中身が枠いっぱい（すき間なし）になる倍率。横長の画面に 4:3 の中身なら、幅いっぱいになる */
@@ -73,6 +76,8 @@ export interface ZoomOptions {
   onDouble?: () => void
   /** 枠（w×h）の中の、中身の大きさ（倍率 1 のとき）。省けば枠と同じ */
   contentSize?: (w: number, h: number) => { w: number; h: number }
+  /** いちばん小さい倍率（枠・中身の大きさから。省けば 1 = 中身が枠に収まる大きさより小さくしない） */
+  minScale?: (w: number, h: number, cw: number, ch: number) => number
   /**
    * true のとき、ふつうのホイール（トラックパッドの 2 本指）で、はみ出した中身を上下左右に動かす
    * （端まで来たら、ページのスクロールに渡す）。下へ伸びるボードで使う
@@ -95,13 +100,14 @@ export function useZoom(boxRef: RefObject<HTMLElement | null>, canPan: (target: 
   const optionsRef = useRef(options)
   optionsRef.current = options
 
-  /** 枠の幅・高さと、中身の幅・高さ（倍率 1 のとき） */
-  const dims = useCallback((): [number, number, number, number] => {
+  /** 枠の幅・高さと、中身の幅・高さ（倍率 1 のとき）と、いちばん小さい倍率 */
+  const dims = useCallback((): [number, number, number, number, number] => {
     const box = boxRef.current
     const w = box?.clientWidth ?? 0
     const h = box?.clientHeight ?? 0
     const c = optionsRef.current.contentSize?.(w, h) ?? { w, h }
-    return [w, h, c.w, c.h]
+    const min = Math.min(MIN_SCALE, optionsRef.current.minScale?.(w, h, c.w, c.h) ?? MIN_SCALE)
+    return [w, h, c.w, c.h, min]
   }, [boxRef])
 
   const setZoom = useCallback(
@@ -149,7 +155,7 @@ export function useZoom(boxRef: RefObject<HTMLElement | null>, canPan: (target: 
     const doubleTarget = (target: EventTarget | null, px: number, py: number): Zoom => {
       optionsRef.current.onDouble?.()
       const z = zoomRef.current
-      if (z.scale > 1) return zoomAt(z, 1, px, py, ...dims())
+      if (Math.abs(z.scale - 1) > 0.01) return zoomAt(z, 1, px, py, ...dims())
       const r = optionsRef.current.focusRect?.(target)
       if (r) {
         const b = box.getBoundingClientRect()
@@ -197,7 +203,7 @@ export function useZoom(boxRef: RefObject<HTMLElement | null>, canPan: (target: 
       if (pinch && e.touches.length === 2) {
         e.preventDefault()
         const m = mid(e.touches)
-        const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, (pinch.s0 * dist(e.touches)) / pinch.d0))
+        const scale = Math.min(MAX_SCALE, Math.max(dims()[4], (pinch.s0 * dist(e.touches)) / pinch.d0))
         setZoom({ scale, x: m.x - pinch.cx * scale, y: m.y - pinch.cy * scale })
         return
       }

@@ -1,7 +1,7 @@
-import { ArrowDownToLine, ArrowUpToLine, FoldVertical, Undo2, BookmarkPlus, BringToFront, Check, ChevronsDown, ChevronsLeft, ChevronsUp, Menu, ImagePlus, Maximize2, Minimize2, Minus, MoveHorizontal, Pencil, Plus, RotateCcw, RotateCw, SendToBack, Shrink, Trash2, Type, X } from 'lucide-react'
+import { Undo2, BookmarkPlus, BringToFront, Check, ChevronsDown, ChevronsLeft, ChevronsUp, Menu, ImagePlus, Maximize2, Minimize2, Minus, MoveHorizontal, Pencil, Plus, RotateCcw, RotateCw, SendToBack, Shrink, Trash2, Type, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { VisionBoard, VisionItem } from './types'
-import { addItem, addView, boardLength, boardRatio, byLayer, growBoard, moveLayer, removeItem, removeView, setAspect, shrinkBoard, trimBoard, updateItem, viewToZoom } from './board'
+import { addItem, addView, boardRatio, byLayer, fitLength, moveLayer, removeItem, removeView, setAspect, updateItem, viewToZoom } from './board'
 import { safeLocalStore } from './storage'
 import { Dialog } from './Dialog'
 import { BoardImage, type LoadImage } from './BoardImage'
@@ -100,6 +100,11 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
     openTimer.current = null
   }
   const ratioRef = useRef(1)
+  /** 見え方の計算に使う、枠と中身の大きさ */
+  const viewDims = (): [number, number, number, number] => {
+    const [w, h, cw, ch] = dims()
+    return [w, h, cw, ch]
+  }
   const scrollRef = useRef(false)
   const { zoom, zoomBy, reset, setZoom, dims, moved } = useZoom(boxRef, (target) => !editing || !(target instanceof Element && target.closest('.vb-vision-item')), {
     // 見るとき、画像・言葉を 2 回たたくと、それが画面いっぱいに見えるように寄る
@@ -107,6 +112,8 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
     onDouble: cancelOpen,
     // 下へ伸びるボードは、ふつうのホイール（トラックパッドの 2 本指）で上下に動かす
     wheelPan: () => scrollRef.current,
+    // 下へ伸びるボードは、全体が 1 画面に収まるところまで縮められる
+    minScale: (_w, h, _cw, ch) => (scrollRef.current && ch > h ? Math.max(0.1, h / ch) : 1),
     // 見える枠は使える場所いっぱい。ボードはその中に収めて真ん中に置く（拡大すると、左右・上下の余白まで広がる）
     // 下へ伸びるボードは、幅いっぱい（枠より高い分は、ホイール・指・ドラッグで下へ動かして見る）
     contentSize: (w, h) => (scrollRef.current ? { w, h: w / ratioRef.current } : fitBoard(w, h, ratioRef.current)),
@@ -148,7 +155,9 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
   // 元に戻す（この画面を開いているあいだ。変える前のボードを積んでおく）
   const history = useRef<VisionBoard[]>([])
   const [undoCount, setUndoCount] = useState(0)
-  const save = (next: VisionBoard) => {
+  const save = (changed: VisionBoard) => {
+    // 下へ伸びるボードは、高さを貼ったものに合わせる（いちばん下の下に、いつも空き）
+    const next = fitLength(changed, new Date())
     setDraft(null)
     history.current = [...history.current.slice(-49), latest.current]
     setUndoCount(history.current.length)
@@ -217,8 +226,10 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
   })
 
   // 下へ伸びるボードが枠より高い（下へ動かして見る）
-  const overflowY = scroll && content.h > frame.h + 1
-  // ボードの大きさが変わったら（形を変えた・元に戻した・下に広げる・詰める）、位置を合わせ直す。
+  const overflowY = scroll && content.h * zoom.scale > frame.h + 1
+  // いちばん小さい倍率（下へ伸びるボードは、全体が 1 画面に収まるまで）
+  const minScale = scroll && content.h > frame.h ? Math.max(0.1, frame.h / content.h) : 1
+  // ボードの大きさが変わったら（形を変えた・元に戻した・下へ伸びるボードの高さが変わった）、位置を合わせ直す。
   // 横長 ↔ 縦長のように高さが同じで幅だけ変わることもあるので、幅も見る
   useEffect(() => {
     setZoom(zoom)
@@ -253,7 +264,7 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
     if (startViewApplied.current || frame.w === 0) return
     startViewApplied.current = true
     const v = (board.views ?? []).find((x) => x.id === activeView)
-    if (v) setZoom(viewToZoom(v, ...dims()))
+    if (v) setZoom(viewToZoom(v, ...viewDims()))
     else if (fill && canFill) fillFrame()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frame.w, board.views])
@@ -286,7 +297,9 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
 
   const showView = (id: string) => {
     const v = (board.views ?? []).find((x) => x.id === id)
-    if (v) setZoom(viewToZoom(v, ...dims()))
+    if (v) setZoom(viewToZoom(v, ...viewDims()))
+    // 「全体」: 下へ伸びるボードは、全体が 1 画面に収まるまで縮める
+    else if (scroll) setZoom({ scale: minScale, x: 0, y: 0 })
     else reset()
     setActiveView(v ? v.id : '')
     setFill(false)
@@ -374,18 +387,12 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
     if (draft) save(draft)
   }
 
-  // 下を詰められるか（貼ったものの少し下・いちばん短い高さ まで来ていたら、もう詰められない）
-  const canTrim = scroll && boardLength(trimBoard(board, new Date())) < boardLength(board) - 0.01
-  /** 下に広げる・詰める量（幅に対する割合）。見える枠の高さの 3/4 くらいずつ */
-  const growStep = () => {
-    const w = frame.w || 1
-    return Math.max(0.25, Math.min(2, ((frame.h || w) * 0.75) / w))
-  }
-
   const sel = board.items.find((i) => i.id === selected) ?? null
   const apply = (next: VisionBoard) => save(next)
 
   const views = board.views ?? []
+  // 見え方を覚えられるか（拡大・縮小しているか、下へ伸びるボードを下へ動かしたとき）
+  const canRemember = Math.abs(zoom.scale - 1) > 0.01 || (overflowY && zoom.y < -1)
   // 編集するときは道具が要るので、たたんでいてもアイコンだけで出す
   const level: BarLevel = editing && barLevel === 'folded' ? 'icons' : barLevel
   const iconOnly = level !== 'full'
@@ -396,7 +403,7 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
           <Minimize2 aria-hidden="true" /> 戻る
         </button>
       )}
-      <button type="button" className="vb-vision-view" aria-pressed={!activeView && zoom.scale <= 1} onClick={() => showView('')}>
+      <button type="button" className="vb-vision-view" aria-pressed={!activeView && zoom.scale <= minScale + 0.01} onClick={() => showView('')}>
         全体
       </button>
       {views.map((v) => (
@@ -423,8 +430,8 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
       <button
         type="button"
         className="vb-vision-view vb-vision-view-add"
-        disabled={zoom.scale <= 1 && !(overflowY && zoom.y < -1)}
-        title={zoom.scale <= 1 && !(overflowY && zoom.y < -1) ? '拡大して見たいところを出してから、覚えられます' : '今の拡大と位置を、名前を付けて覚える'}
+        disabled={!canRemember}
+        title={!canRemember ? '拡大して見たいところを出してから、覚えられます' : '今の拡大と位置を、名前を付けて覚える'}
         aria-label="この見え方を覚える"
         onClick={() => setNaming('')}
       >
@@ -531,37 +538,6 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
               <option value="cork">背景: コルク</option>
               <option value="night">背景: 夜空</option>
             </select>
-            {/* 下へ伸びるボード: 高さを変える（道具の行に置く。スマホでも見えるように） */}
-            {scroll && (
-              <>
-                <button type="button" className="vb-button" onClick={() => apply(growBoard(board, growStep(), new Date()))} aria-label="下に広げる" title="宝地図の下に、空きを足す">
-                  <ArrowDownToLine aria-hidden="true" />
-                  {!iconOnly && '下に広げる'}
-                </button>
-                <button
-                  type="button"
-                  className="vb-button"
-                  disabled={!canTrim}
-                  onClick={() => apply(shrinkBoard(board, growStep(), new Date()))}
-                  aria-label="下を詰める"
-                  title="宝地図の下の空きを詰める（貼ったものは切らない）"
-                >
-                  <ArrowUpToLine aria-hidden="true" />
-                  {!iconOnly && '下を詰める'}
-                </button>
-                <button
-                  type="button"
-                  className="vb-button"
-                  disabled={!canTrim}
-                  onClick={() => apply(trimBoard(board, new Date()))}
-                  aria-label="下の空きをなくす"
-                  title="宝地図の下の空きを、一度になくす（いちばん下に貼ったものの、少し下まで。貼ったものは切らない）"
-                >
-                  <FoldVertical aria-hidden="true" />
-                  {!iconOnly && '下の空きをなくす'}
-                </button>
-              </>
-            )}
           </>
         )}
         {error && (
@@ -782,10 +758,10 @@ export function VisionBoardView({ board: saved, onChange, uploadImage, loadImage
           <button type="button" className="vb-icon-button" aria-label="拡大" title="拡大" onClick={() => zoomBy(1.5)}>
             <Plus aria-hidden="true" />
           </button>
-          <button type="button" className="vb-icon-button" aria-label="縮小" title="縮小" disabled={zoom.scale <= 1} onClick={() => zoomBy(1 / 1.5)}>
+          <button type="button" className="vb-icon-button" aria-label="縮小" title="縮小" disabled={zoom.scale <= minScale + 0.001} onClick={() => zoomBy(1 / 1.5)}>
             <Minus aria-hidden="true" />
           </button>
-          {zoom.scale > 1 && (
+          {Math.abs(zoom.scale - 1) > 0.01 && (
             <button type="button" className="vb-icon-button" aria-label="元の大きさに戻す" title="元の大きさに戻す" onClick={reset}>
               <Shrink aria-hidden="true" />
             </button>

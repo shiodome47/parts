@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_LENGTH, addItem, addView, boardLength, boardRatio, byLayer, contentBottom, emptyBoard, getBoard, growBoard, moveLayer, removeItem, removeView, setAspect, setLength, shrinkBoard, trimBoard, updateItem, viewToZoom } from '../board'
+import { MAX_LENGTH, addItem, addView, boardLength, boardRatio, byLayer, contentBottom, emptyBoard, fitLength, SCROLL_SPACE, getBoard, growBoard, moveLayer, removeItem, removeView, setAspect, setLength, shrinkBoard, trimBoard, updateItem, viewToZoom } from '../board'
 import type { VisionBoard } from '../types'
 
 const NOW = new Date(2026, 10, 18, 9, 0)
 const empty = (): { boards?: VisionBoard[] } => ({})
 
 describe('宝地図', () => {
-  it('まだ無ければ、空の横長のボード', () => {
+  it('まだ無ければ、空の下へ伸びるボード', () => {
     const b = getBoard(empty(), NOW)
-    expect(b).toMatchObject({ id: 'main', aspect: 'landscape', items: [] })
+    expect(b).toMatchObject({ id: 'main', aspect: 'scroll', items: [] })
   })
 
   it('貼ると、少しずつずらして、いちばん手前に置く', () => {
@@ -94,7 +94,7 @@ describe('宝地図の見え方を覚える', () => {
 describe('下へ伸びるボード', () => {
   const T = new Date(2026, 10, 19, 9, 0)
   const withItems = () => {
-    let b = emptyBoard(T)
+    let b: VisionBoard = { ...emptyBoard(T), aspect: 'landscape' }
     b = addItem(b, { kind: 'image', url: 'https://x/a.webp', x: 0.1, y: 0.2, w: 0.3 }, T)
     b = addView(b, '上', { scale: 2, x: -100, y: -50 }, 800, 600, 800, 600, T)
     return b
@@ -127,7 +127,23 @@ describe('下へ伸びるボード', () => {
     expect(contentBottom(s)).toBeLessThan(boardLength(s))
     // 一度になくす: 少しずつ詰めたときと同じところまで
     expect(boardLength(trimBoard(b, T))).toBeCloseTo(boardLength(s))
-    expect(setLength(withItems(), 3, T).length).toBeUndefined()
+    const land = withItems()
+    expect(setLength(land, 3, T)).toBe(land)
     expect(boardLength(setLength(b, 999, T))).toBe(MAX_LENGTH)
+  })
+})
+
+describe('下へ伸びるボードの高さは、貼ったものに合わせる', () => {
+  const T = new Date(2026, 10, 20, 9, 0)
+  it('いちばん下に貼ったものの下に、いつも SCROLL_SPACE の空き。ほかの形はそのまま', () => {
+    let b = emptyBoard(T)
+    expect(boardLength(fitLength(b, T))).toBeCloseTo(SCROLL_SPACE)
+    b = addItem(b, { kind: 'image', url: 'https://x/a.webp', x: 0.1, y: 0.9, w: 0.3 }, T)
+    const f = fitLength(b, T)
+    // 画像の上は幅の 0.675（0.9 × 0.75）。その下に画像（0.3）と空き
+    expect(boardLength(f)).toBeCloseTo(0.9 * 0.75 + 0.3 + SCROLL_SPACE)
+    expect(f.items[0].y * boardLength(f)).toBeCloseTo(0.9 * 0.75)
+    const land = { ...b, aspect: 'landscape' as const }
+    expect(fitLength(land, T)).toBe(land)
   })
 })
