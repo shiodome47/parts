@@ -74,11 +74,14 @@ describe('<VisionBoard>', () => {
     expect(board.items.map((i) => i.text)).toEqual(['感謝'])
   })
 
-  it('下へ伸びるボードでは、「編集」の道具の行に「下に広げる」が出る', () => {
-    const board = { ...emptyBoard(NOW), aspect: 'scroll' as const, length: 1 }
-    render(<VisionBoard board={board} onChange={() => {}} />)
-    expect(screen.queryByRole('button', { name: '下に広げる' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '編集' }))
-    expect(screen.getByRole('toolbar', { name: '宝地図の道具' }).querySelector('[aria-label="下に広げる"]')).toBeTruthy()
+  it('貼ると、下へ伸びるボードの高さを貼ったものに合わせて onChange に渡す', () => {
+    const onChange = vi.fn<(b: VisionBoardData) => void>()
+    render(<VisionBoard board={{ ...emptyBoard(NOW), length: 5 }} onChange={onChange} />)
+    fireEvent.click(screen.getByRole('button', { name: '言葉を貼る' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '貼る言葉' }), { target: { value: '感謝' } })
+    fireEvent.click(screen.getByRole('button', { name: '貼る' }))
+    const saved = onChange.mock.calls[0][0]
+    expect(saved.aspect).toBe('scroll')
+    expect(saved.length).toBeLessThan(5)
   })
 })

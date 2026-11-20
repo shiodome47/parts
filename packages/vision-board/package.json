@@ -1,6 +1,6 @@
 {
   "name": "@shiodome47/vision-board",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "宝地図（ビジョンボード）の部品。画像と言葉を自由に貼り、ピンチで拡大、見え方を覚えて切り替えられる（React）",
   "keywords": [
     "vision-board",

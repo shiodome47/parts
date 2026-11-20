@@ -16,6 +16,8 @@ export const ASPECT_RATIO: Record<Exclude<VisionBoard['aspect'], 'scroll'>, numb
 
 /** 下へ伸びるボードの高さ（幅に対する割合）の、いちばん短い・長い */
 export const MIN_LENGTH = 0.5
+/** 下へ伸びるボードで、いちばん下に貼ったものの下に空けておく高さ（幅に対する割合） */
+export const SCROLL_SPACE = 0.75
 export const MAX_LENGTH = 30
 /** 下へ伸びるボードの高さ（まだ決めていなければ、横長と同じ） */
 export function boardLength(board: VisionBoard): number {
@@ -27,10 +29,10 @@ export function boardRatio(board: VisionBoard): number {
   return 1 / boardLength(board)
 }
 
-/** 空の新しいボード（横長・紙） */
+/** 空の新しいボード（下へ伸びる・紙） */
 export function emptyBoard(now: Date = new Date(), id: string = BOARD_ID): VisionBoard {
   const t = now.toISOString()
-  return { id, aspect: 'landscape', background: 'paper', items: [], createdAt: t, updatedAt: t }
+  return { id, aspect: 'scroll', length: SCROLL_SPACE, background: 'paper', items: [], createdAt: t, updatedAt: t }
 }
 
 /** アプリのデータ（boards: ボードの一覧 を持つもの。ほかの項目があってもよい）から、そのボード（まだ無ければ、空の新しいもの） */
@@ -189,6 +191,15 @@ export function setLength(board: VisionBoard, length: number, now: Date): Vision
 export function contentBottom(board: VisionBoard): number {
   const len = boardLength(board)
   return Math.max(0, ...board.items.map((i) => i.y * len + (i.kind === 'image' ? i.w : (i.size ?? 0.05) * 2.5)))
+}
+
+/**
+ * 下へ伸びるボードの高さを、貼ったものに合わせる（いちばん下に貼ったものの下に、いつも SCROLL_SPACE の空き）。
+ * 下のはしまで動かせば伸び、下のものをはがせば縮む。ほかの形はそのまま
+ */
+export function fitLength(board: VisionBoard, now: Date): VisionBoard {
+  if (board.aspect !== 'scroll') return board
+  return setLength(board, Math.max(MIN_LENGTH, contentBottom(board) + SCROLL_SPACE), now)
 }
 
 /** 下へ広げる（step は幅に対する割合） */

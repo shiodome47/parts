@@ -11,6 +11,8 @@ export type { VisionBoard as VisionBoardData, VisionItem, VisionView } from './t
 export {
   ASPECT_RATIO,
   MIN_LENGTH,
+  SCROLL_SPACE,
+  fitLength,
   MAX_LENGTH,
   boardLength,
   boardRatio,
