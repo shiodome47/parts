@@ -39,6 +39,12 @@ describe('プロジェクトのカードの並び（linkshelf の <CardBoard> �
     expect(cardSize(d, d.projects[0])).toBe(2 + 3 + 1)
   })
 
+  it('大きさの目安: 終えた目標は、たたんだ 1 行の分だけ', () => {
+    const d = withGoals([P('A', 0)], { A: 4 })
+    const done = { ...d, tasks: d.tasks.map((t, i) => (i < 3 ? { ...t, doneAt: NOW.toISOString() } : t)) }
+    expect(cardSize(done, done.projects[0])).toBe(1 + 1)
+  })
+
   it('まだ置いていないカードは、順番どおりにいちばん短い列の下へ', () => {
     const d = withGoals([P('A', 0), P('B', 1), P('C', 2), P('D', 3)], { A: 8, B: 1, C: 1 })
     expect(ids(layoutProjects(cardsOf(d), 3))).toEqual([['A'], ['B', 'D'], ['C']])

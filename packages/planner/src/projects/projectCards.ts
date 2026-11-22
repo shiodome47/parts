@@ -19,7 +19,10 @@ export function cardSize(data: PlannerData, project: Project): number {
     const habits = data.habits.filter((h) => h.projectId === p.id)
     // 終えたルーチン目標は、たたんだ 1 行（「これまでのルーチン目標」）の分だけ
     const live = habits.filter((h) => !h.endedAt).length
-    return data.tasks.filter((t) => isProjectGoal(t) && t.projectId === p.id).length + live + (live < habits.length ? 1 : 0)
+    const goals = data.tasks.filter((t) => isProjectGoal(t) && t.projectId === p.id)
+    // 終えた目標も、たたんだ 1 行（「終えた目標」）の分だけ
+    const open = goals.filter((t) => !t.doneAt).length
+    return open + (open < goals.length ? 1 : 0) + live + (live < habits.length ? 1 : 0)
   }
   return own(project) + childProjects(data, project.id).reduce((n, c) => n + 3 + own(c), 0)
 }

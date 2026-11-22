@@ -788,7 +788,7 @@ export function bringToToday(task: Task, now: Date): Changes {
 // ─── プロジェクトの期日目標の並び ─────────────────────────────
 
 /**
- * プロジェクトの期日目標を並べる（open: 終えていないもの、done: 終えたもの＝いちばん下）。
+ * プロジェクトの期日目標を並べる（open: 終えていないもの、done: 終えたもの。新しく終えた順。画面では一番下の「終えた目標」にたたむ）。
  * 並びは「席」で考える: どの目標も席（goalOrder）を持ち、
  * - 日付の無いものは、ドラッグで置いた席にそのまま座る（日付のあるものの間にも置ける）
  * - 日付のあるものが座る席には、いつも日付の遠い順に入れ直す（日付のルールは崩れない）
@@ -802,7 +802,7 @@ export function projectGoals(data: PlannerData, projectId: string): { open: Task
   const byDate = open.filter((g) => g.due).sort((a, b) => b.due!.localeCompare(a.due!) || a.createdAt.localeCompare(b.createdAt))
   let next = 0
   const ordered = seats.map((g) => (g.due ? byDate[next++] : g))
-  const done = goals.filter((g) => g.doneAt).sort((a, b) => (b.due ?? '').localeCompare(a.due ?? '') || a.createdAt.localeCompare(b.createdAt))
+  const done = goals.filter((g) => g.doneAt).sort((a, b) => b.doneAt!.localeCompare(a.doneAt!) || a.createdAt.localeCompare(b.createdAt))
   return { open: ordered, done }
 }
 

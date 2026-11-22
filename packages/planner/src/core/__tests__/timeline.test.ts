@@ -530,6 +530,15 @@ describe('プロジェクトの期日目標の並び', () => {
     expect(projectGoals(done, p.id).done.map((x) => x.title)).toEqual(['単語'])
   })
 
+  it('終えたものは、新しく終えた順（日付の順ではなく）', () => {
+    const { d, p } = setup()
+    const [a, b, c] = projectGoals(d, p.id).open
+    let x = applyChanges(d, toggleDone(d, b, new Date(2026, 10, 10)))
+    x = applyChanges(x, toggleDone(x, c, new Date(2026, 10, 15)))
+    x = applyChanges(x, toggleDone(x, a, new Date(2026, 10, 12)))
+    expect(projectGoals(x, p.id).done.map((g) => g.title)).toEqual([c.title, a.title, b.title])
+  })
+
   it('日付の無いものは、日付のあるものの間にも置ける（時間軸の並びは変えない）', () => {
     const { d, p } = setup()
     const ids = projectGoals(d, p.id).open.map((x) => x.id)

@@ -47,6 +47,7 @@ function App() {
 - 画面の中で使う React の部品・ドラッグ（@dnd-kit）・アイコン（lucide-react）・linkshelf は、`npm install` で一緒に入ります。React（18・19）は使う側のもの
 - 列を広げた状態や、書きかけの文字は、見る人のブラウザに覚えます（名前は `planner:…`）
 - 時間軸のやることは、ドラッグで並べ替えられます。別の優先度のまとまりへ落とすと、その優先度になります。項目が 1 つも無い優先度（C しか無いときの D・P など）は、**ドラッグしている間だけ、その場所に細い帯**（「D 低へ」）が出て、そこへ落とすと移せます。帯は行の上に重ねて出すので、行は動きません
+- プロジェクトの終えた期日目標は、一番下の **「終えた目標（n）」** にたたみます（はじめは閉じている。新しく終えた順。開けば見られ、チェックを外せば上へ戻る）。細かいステップを足していっても、カードが終えたもので埋まりません
 - 時間軸は、スマホの幅では列を横にすべらせ、上の帯から列を選べます。プロジェクトは、画面の幅に合わせて段組みになり、カードをドラッグで並べ替えられます（キーボードでも）
 
 ### 習慣を終える（卒業・お休み）・完全に消す
@@ -133,7 +134,7 @@ data = applyChanges(data, toggleDone(data, data.tasks[0], now))
 | 習慣 | `newHabit` `toggleHabit` `toggleHabitAll` `placeHabitDown` `habitToTask` `reorderHabits` |
 | 習慣を終える | `endHabit(data, habit, 'graduated' \| 'paused', ひとこと, now)` 卒業・お休み（終えた習慣なら、終え方とひとことだけ変える）／`resumeHabit(data, habit, now)` また始める／`endedHabits(habits)` 終えた習慣を新しい順に。`buildColumns` の列は、終えた習慣を `habits` に入れず `ended` に入れる |
 | くり返しの「その日」 | 毎月: `withDay(habit, 20 \| 'end' \| 'w2-3' \| 'wL-5')`／毎週・毎年: `withWhen(habit, 3 \| '12-06' \| '12')`／`whenLabel` `whenDate` `monthDayDate` |
-| プロジェクト | `newProject` `topProjects` `childProjects` `moveProject` `removeProject` `reorderProjects` `projectGoals` `reorderGoals` |
+| プロジェクト | `newProject` `topProjects` `childProjects` `moveProject` `removeProject` `reorderProjects` `projectGoals`（終えていないもの・終えたもの＝新しく終えた順）`reorderGoals` |
 | 振り返り | `doneOn(data, day, now)` その日に済ませたこと／`streak(habit, now)` 続いた日数／`toggleHabitOnDay` `finishOnDay`（過ぎた日に付け直す）／`habitActiveOn(habit, day)` その日に続けていたか（始める前・終えたあと・休んでいた間は数えない。「毎日 3/4」の分母に使う）／`habitRecord(habit, now)` 始めてから終えるまでの、できた数と期間の数 |
 | 日付 | `dayKey` `weekKey` `weekStart` `addDays` `periodLabel` `dueLabel` `shortDueLabel` |
 | 当てる | `applyChanges(data, changes)` ／ `mergeById(list, puts, deleteIds)` |
