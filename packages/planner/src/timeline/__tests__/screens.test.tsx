@@ -70,6 +70,21 @@ describe('<Projects>', () => {
     const card = screen.getByRole('region', { name: '自治会' })
     expect(within(card).getByText('防災訓練の下見')).toBeTruthy()
   })
+
+  it('終えた目標は、一番下の「終えた目標（n）」にたたむ（はじめは閉じている）', () => {
+    let d = sample()
+    const p = d.projects[0]
+    d = applyChanges(d, { tasks: [{ ...newTask(d, { title: 'リーディング10回', horizon: 'pool', priority: 'C', projectId: p.id }, NOW), doneAt: NOW.toISOString() }] })
+    d = applyChanges(d, { tasks: [{ ...newTask(d, { title: 'リーディング20回', horizon: 'pool', priority: 'C', projectId: p.id }, NOW), doneAt: NOW.toISOString() }] })
+    render(<Projects data={d} now={NOW} onChange={() => {}} />)
+    const card = screen.getByRole('region', { name: '自治会' })
+    const summary = within(card).getByText('終えた目標（2）')
+    const fold = summary.closest('details')!
+    expect(fold.open).toBe(false)
+    expect(within(fold).getByText('リーディング10回')).toBeTruthy()
+    // 終えていない目標は、たたまずに上に出る
+    expect(within(card).getByText('防災訓練の下見').closest('details')).toBeNull()
+  })
 })
 
 describe('習慣を終える（卒業・お休み）・完全に消す', () => {

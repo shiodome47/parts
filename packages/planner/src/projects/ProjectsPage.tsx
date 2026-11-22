@@ -372,10 +372,6 @@ function ProjectBody({
               <GoalRow key={g.id} g={g} data={data} apply={apply} now={now} openers={openers} sortable={g.due ? 'drop' : 'drag'} />
             ))}
           </SortableList>
-          {/* 終えたものは、いちばん下 */}
-          {done.map((g) => (
-            <GoalRow key={g.id} g={g} data={data} apply={apply} now={now} openers={openers} />
-          ))}
         </ul>
         {/* 足す欄も、上の行と同じ並び: [＋][期日][名前] */}
         <div className="pl-goal pl-goal-add">
@@ -394,6 +390,17 @@ function ProjectBody({
             }}
           />
         </div>
+        {/* 終えた目標は、一番下にたたんでおく（新しく終えた順。開けば見られ、チェックを外せば上へ戻る） */}
+        {done.length > 0 && (
+          <details className="pl-ended">
+            <summary className="pl-ended-summary">終えた目標（{done.length}）</summary>
+            <ul className="pl-list">
+              {done.map((g) => (
+                <GoalRow key={g.id} g={g} data={data} apply={apply} now={now} openers={openers} />
+              ))}
+            </ul>
+          </details>
+        )}
       </div>
 
       <div className="pl-block">

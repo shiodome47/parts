@@ -1,6 +1,6 @@
 {
   "name": "@shiodome47/planner",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "時間軸（今日・今週・数か月・今年）とプロジェクトの部品。土台（データの形と決まりごと）と、時間軸・プロジェクトの画面（React）",
   "keywords": [
     "planner",
