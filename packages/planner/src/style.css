@@ -1610,3 +1610,102 @@
   border-style: solid;
   background: linear-gradient(color-mix(in srgb, var(--pl-pc) 30%, transparent), color-mix(in srgb, var(--pl-pc) 30%, transparent)), var(--pl-panel);
 }
+/* ─── 目標を細かく分ける（目標と、その中身のプロジェクト） ─── */
+/* 目標の行: 中身の進み具合（押すと中身へ） */
+.planner .pl-breakdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--pl-border);
+  border-radius: 999px;
+  background: var(--pl-panel-2);
+  color: var(--pl-muted);
+  font: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.planner .pl-breakdown svg {
+  width: 13px;
+  height: 13px;
+}
+.planner .pl-breakdown:hover {
+  border-color: var(--pl-accent);
+  color: var(--pl-accent);
+}
+.planner .pl-breakdown:focus-visible,
+.planner .pl-breakdown-of:focus-visible {
+  outline: 2px solid var(--pl-accent);
+  outline-offset: 1px;
+}
+/* 中身が全部できた */
+.planner .pl-breakdown-full {
+  border-color: var(--pl-ok);
+  color: var(--pl-ok);
+}
+/* 中身のプロジェクト: どの目標の中身か（押すと目標のプロジェクトへ） */
+.planner .pl-breakdown-of {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 0 0 4px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pl-muted);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+}
+.planner .pl-breakdown-of svg {
+  width: 13px;
+  height: 13px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.planner .pl-breakdown-of:hover {
+  color: var(--pl-accent);
+}
+/* 「細かく分ける」の小窓: 今あるものをつなぐ欄 */
+.planner .pl-split-link {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--pl-border);
+}
+/* 移ってきたカードを、少しのあいだ光らせる */
+.planner .pl-flash {
+  animation: pl-flash 1.6s ease-out;
+}
+@keyframes pl-flash {
+  0%,
+  40% {
+    box-shadow: 0 0 0 3px var(--pl-accent);
+  }
+  100% {
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .planner .pl-flash {
+    animation: none;
+    outline: 2px solid var(--pl-accent);
+  }
+}
+/* 中身のある目標: 名前の下に進み具合 */
+.planner .pl-goal-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+.planner .pl-goal-main > .pl-title-button {
+  align-self: stretch;
+}

@@ -8,6 +8,7 @@ import { inSamePeriod } from '../core'
 import { PERIOD_NAME } from '../core'
 import {
   childProjects,
+  goalBreakdown,
   moveProject,
   nextGoalOrder,
   projectGoals,
@@ -21,6 +22,7 @@ import {
   toggleDone,
   toggleHabit,
   topProjects,
+  unlinkGoal,
 } from '../core'
 import { endedHabits, type Habit, type PlannerData, type Period, type Project, type Task } from '../core'
 import { PROJECT_COLORS } from './colors'
@@ -32,6 +34,7 @@ import { NoteTitle } from '../ui/NoteDialog'
 import { JumpBar, scrollToElement } from '../ui/JumpBar'
 import { WhenSelect } from '../ui/WhenSelect'
 import { EndedHabits, useHabitEnd } from '../ui/EndedHabits'
+import { BreakdownChip, BreakdownOf, SplitGoalDialog, jumpToProject } from './Breakdown'
 
 const PERIODS: Period[] = ['day', 'week', 'month', 'year']
 
@@ -163,11 +166,13 @@ function ProjectCard({
             ...colorItems(project, apply),
             ...(themes.length ? ['separator' as const] : []),
             ...themes.map((th) => ({ label: `「${th.name}」の中に入れる`, onSelect: () => apply(moveProject(data, project, th.id, new Date())) })),
+            ...unlinkItems(project, apply),
             'separator' as const,
             { label: children.length ? 'テーマを消す' : 'プロジェクトを消す', danger: true, onSelect: () => setConfirmDelete(true) },
           ]}
         />
       </header>
+      <BreakdownOf project={project} data={data} />
 
       {confirmDelete && (
         <ConfirmRemove
@@ -229,6 +234,7 @@ function SubProject({ project, parent, data, apply, now }: { project: Project; p
       style={sortable.style}
       className={`pl-subproject${sortable.isDragging ? ' pl-dragging' : ''}`}
       aria-label={`${parent.name}・${project.name}`}
+      data-project={project.id}
     >
       <header className="pl-subproject-header">
         <button
@@ -262,11 +268,13 @@ function SubProject({ project, parent, data, apply, now }: { project: Project; p
             'separator',
             { label: `「${parent.name}」から出す`, onSelect: () => apply(moveProject(data, project, undefined, new Date())) },
             ...otherThemes.map((th) => ({ label: `「${th.name}」の中に移す`, onSelect: () => apply(moveProject(data, project, th.id, new Date())) })),
+            ...unlinkItems(project, apply),
             'separator',
             { label: 'プロジェクトを消す', danger: true, onSelect: () => setConfirmDelete(true) },
           ]}
         />
       </header>
+      <BreakdownOf project={project} data={data} />
       {confirmDelete && (
         <ConfirmRemove project={project} extra="" onCancel={() => setConfirmDelete(false)} onRemove={() => apply(removeProject(data, project))} />
       )}
@@ -291,6 +299,11 @@ function ConfirmRemove({ project, extra, onCancel, onRemove }: { project: Projec
       </div>
     </div>
   )
+}
+
+/** 目標の「中身」になっているプロジェクトの … に足す、つなぎを外す */
+function unlinkItems(project: Project, apply: Apply): MenuItem[] {
+  return project.goalId ? [{ label: '目標の中身をやめる（つなぎを外す）', onSelect: () => apply(unlinkGoal(project, new Date())) }] : []
 }
 
 function colorItems(project: Project, apply: Apply): MenuItem[] {
@@ -509,6 +522,23 @@ function GoalRow({
 }) {
   const t = () => new Date().toISOString()
   const row = useSortableRow(g.id, sortable === 'drag' ? false : sortable === 'drop' ? { draggable: true, droppable: false } : true)
+  // 目標を細かく分ける（中身のプロジェクト）
+  const [splitting, setSplitting] = useState(false)
+  const inner = goalBreakdown(data, g)
+  const title = (
+    <NoteTitle
+      title={g.title}
+      note={g.note}
+      wrap
+      renameLabel="期日目標の名前"
+      menuOpener={(o) => (openers[g.id] = o)}
+      onRename={(title) => apply({ tasks: [{ ...g, title, updatedAt: t() }] })}
+      onSaveNote={(note) => {
+        const { note: _n, ...rest } = g
+        apply({ tasks: [{ ...rest, ...(note ? { note } : {}), updatedAt: t() }] })
+      }}
+    />
+  )
   return (
             <li
               ref={sortable ? row.ref : undefined}
@@ -536,27 +566,31 @@ function GoalRow({
                   apply({ tasks: [value ? { ...rest, due: value, updatedAt: t() } : { ...rest, updatedAt: t() }] })
                 }}
               />
-              <NoteTitle
-                title={g.title}
-                note={g.note}
-                wrap
-                renameLabel="期日目標の名前"
-                menuOpener={(o) => (openers[g.id] = o)}
-                onRename={(title) => apply({ tasks: [{ ...g, title, updatedAt: t() }] })}
-                onSaveNote={(note) => {
-                  const { note: _n, ...rest } = g
-                  apply({ tasks: [{ ...rest, ...(note ? { note } : {}), updatedAt: t() }] })
-                }}
-              />
+              {/* 中身があれば、名前の下に進み具合（名前の幅を狭めないように） */}
+              {inner ? (
+                <div className="pl-goal-main">
+                  {title}
+                  <BreakdownChip goal={g} data={data} />
+                </div>
+              ) : (
+                title
+              )}
               <Menu
                 label={`「${g.title}」の操作`}
                 items={[
                   { label: '名前を変える', onSelect: () => openers[g.id]?.rename() },
                   { label: g.note ? 'メモを見る' : 'メモを書く', onSelect: () => openers[g.id]?.note() },
+                  ...(inner
+                    ? [
+                        { label: `中身「${inner.project.name}」へ移動`, onSelect: () => jumpToProject(inner.project.id) },
+                        { label: '中身とのつなぎを外す', onSelect: () => apply(unlinkGoal(inner.project, new Date())) },
+                      ]
+                    : [{ label: '細かく分ける…', onSelect: () => setSplitting(true) }]),
                   'separator',
                   { label: '消す', danger: true, onSelect: () => apply(removeTask(data, g, now)) },
                 ]}
               />
+              {splitting && <SplitGoalDialog goal={g} data={data} apply={apply} onClose={() => setSplitting(false)} />}
             </li>
   )
 }

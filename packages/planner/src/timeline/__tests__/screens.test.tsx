@@ -164,3 +164,69 @@ describe('習慣を終える（卒業・お休み）・完全に消す', () => {
     expect(within(card).getByText('これまでのルーチン目標（1）')).toBeTruthy()
   })
 })
+
+describe('目標を細かく分ける（中身のプロジェクト）', () => {
+  beforeAll(() => {
+    const proto = HTMLDialogElement.prototype
+    if (!proto.showModal) proto.showModal = function (this: HTMLDialogElement) { this.setAttribute('open', '') }
+    if (!proto.close) proto.close = function (this: HTMLDialogElement) { this.removeAttribute('open') }
+  })
+
+  /** テーマ「英語」の中に「TOEICお受験」（目標: ALL IN ONE 完了）と「ALL IN ONE 完遂」（ステップ 3 つ、1 つ終えた） */
+  function english(link: boolean): PlannerData {
+    let d: PlannerData = { tasks: [], habits: [], projects: [] }
+    const eng = newProject(d, { name: '英語', color: 'blue' }, NOW)
+    d = applyChanges(d, { projects: [eng] })
+    const toeic = newProject(d, { name: 'TOEICお受験', color: 'blue', parentId: eng.id }, NOW)
+    d = applyChanges(d, { projects: [toeic] })
+    const goal = newTask(d, { title: 'ALL IN ONE 完了', horizon: 'pool', priority: 'C', projectId: toeic.id }, NOW)
+    d = applyChanges(d, { tasks: [goal] })
+    const aio = { ...newProject(d, { name: 'ALL IN ONE 完遂', color: 'blue', parentId: eng.id }, NOW), ...(link ? { goalId: goal.id } : {}) }
+    d = applyChanges(d, { projects: [aio] })
+    for (const title of ['リーディング10回', 'リーディング20回', 'リーディング30回']) {
+      d = applyChanges(d, { tasks: [newTask(d, { title, horizon: 'pool', priority: 'C', projectId: aio.id }, NOW)] })
+    }
+    d = applyChanges(d, { tasks: [{ ...d.tasks.find((t) => t.title === 'リーディング10回')!, doneAt: NOW.toISOString() }] })
+    return d
+  }
+  const pick = (name: string, item: string) => {
+    fireEvent.click(screen.getByRole('button', { name: `「${name}」の操作` }))
+    fireEvent.click(screen.getByRole('menuitem', { name: item }))
+  }
+
+  it('つないだ目標の行に中身の進み具合、中身のプロジェクトに、どの目標の中身か', () => {
+    render(<Projects data={english(true)} now={NOW} onChange={() => {}} />)
+    expect(screen.getByRole('button', { name: '中身「ALL IN ONE 完遂」1/3。押すと移動' })).toBeTruthy()
+    expect(screen.getByText('「TOEICお受験」の目標「ALL IN ONE 完了」の中身')).toBeTruthy()
+  })
+
+  it('… →「細かく分ける…」→「作る」で、中身のプロジェクトを新しく作る', () => {
+    const onChange = vi.fn<(c: Changes) => void>()
+    const d = english(false)
+    render(<Projects data={d} now={NOW} onChange={onChange} />)
+    pick('ALL IN ONE 完了', '細かく分ける…')
+    fireEvent.change(screen.getByRole('textbox', { name: '中身のプロジェクトの名前' }), { target: { value: 'ALL IN ONE を進める' } })
+    fireEvent.click(screen.getByRole('button', { name: '作る' }))
+    const made = onChange.mock.calls[0][0].projects!.find((p) => p.name === 'ALL IN ONE を進める')!
+    expect(made.goalId).toBe(d.tasks.find((t) => t.title === 'ALL IN ONE 完了')!.id)
+  })
+
+  it('… →「細かく分ける…」で、今あるプロジェクトをつなぐこともできる', () => {
+    const onChange = vi.fn<(c: Changes) => void>()
+    const d = english(false)
+    render(<Projects data={d} now={NOW} onChange={onChange} />)
+    pick('ALL IN ONE 完了', '細かく分ける…')
+    const aio = d.projects.find((p) => p.name === 'ALL IN ONE 完遂')!
+    fireEvent.change(screen.getByRole('combobox', { name: '中身にするプロジェクト' }), { target: { value: aio.id } })
+    fireEvent.click(screen.getByRole('button', { name: 'つなぐ' }))
+    expect(onChange.mock.calls[0][0].projects).toEqual([expect.objectContaining({ id: aio.id, goalId: d.tasks[0].id })])
+  })
+
+  it('… →「中身とのつなぎを外す」', () => {
+    const onChange = vi.fn<(c: Changes) => void>()
+    render(<Projects data={english(true)} now={NOW} onChange={onChange} />)
+    pick('ALL IN ONE 完了', '中身とのつなぎを外す')
+    expect(onChange.mock.calls[0][0].projects![0]).toMatchObject({ name: 'ALL IN ONE 完遂' })
+    expect(onChange.mock.calls[0][0].projects![0].goalId).toBeUndefined()
+  })
+})
