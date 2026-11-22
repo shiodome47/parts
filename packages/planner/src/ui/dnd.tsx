@@ -14,19 +14,30 @@ export function SortableList({
   ids,
   strategy,
   onMove,
+  onDragging,
   children,
 }: {
   ids: string[]
   strategy: SortingStrategy
+  /** overId は、落とした先の行（並べ替え）か、行のほかに置いた落とし先（useDroppable）の id */
   onMove: (activeId: string, overId: string) => void
+  /** ドラッグを始めた・終えた（ドラッグの間だけ出す落とし先のため） */
+  onDragging?: (dragging: boolean) => void
   children: ReactNode
 }) {
   const sensors = useLampSensors()
   const onDragEnd = ({ active, over }: DragEndEvent) => {
+    onDragging?.(false)
     if (over && active.id !== over.id) onMove(String(active.id), String(over.id))
   }
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={() => onDragging?.(true)}
+      onDragCancel={() => onDragging?.(false)}
+      onDragEnd={onDragEnd}
+    >
       <SortableContext items={ids} strategy={strategy}>
         {children}
       </SortableContext>

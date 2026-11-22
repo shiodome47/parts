@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { safeLocalStore } from '../ui/storage'
 import { periodLabel } from '../core'
 import { HORIZON_NAME, HORIZON_SUB, PRIORITY_NAME } from '../core'
-import { buildColumns, newHabit, newTask, reorderHabits, reorderTasks, type ColumnView, type TaskView } from '../core'
+import { buildColumns, emptyPriorityGaps, newHabit, newTask, reorderHabits, reorderTasks, setPriority, type ColumnView, type TaskView } from '../core'
+import { useDroppable } from '@dnd-kit/core'
 import { verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { SortableList } from '../ui/dnd'
 import { PRIORITIES, type PlannerData, type Priority } from '../core'
@@ -220,22 +221,43 @@ function Column({
   )
 }
 
-/** 優先度ごとのまとまり（A 重要・緊急 … P Private）。空のまとまりは出さない */
+/** ドラッグで、空の優先度に移すときの落とし先の id（行の id とぶつからないように頭に付ける） */
+const PRIORITY_DROP = 'priority:'
+
+/** 落とし先の id から優先度を読む（行の id なら undefined） */
+function droppedPriority(id: string): Priority | undefined {
+  const p = id.startsWith(PRIORITY_DROP) ? id.slice(PRIORITY_DROP.length) : ''
+  return (PRIORITIES as string[]).includes(p) ? (p as Priority) : undefined
+}
+
+/**
+ * 優先度ごとのまとまり（A 重要・緊急 … P Private）。空のまとまりは出さない。
+ * ドラッグしている間だけ、空の優先度の落とし先（細い帯）を、その優先度の場所に重ねて出す
+ * （B の上に A、C の下に D・P など）。帯に落とすと、その優先度に変わる。
+ * 帯は行の上に重ねるので、出ても行は動かない（つかんだ行が指からずれない）
+ */
 function TaskGroups({ views, data, store, now }: { views: TaskView[]; data: PlannerData; store: PlannerStore; now: Date }) {
+  const [dragging, setDragging] = useState(false)
   if (views.length === 0) return null
   // 画面に並んでいる順（A → P）。別の優先度のまとまりへ落とすと、その優先度になる
   const ids = views.map((v) => v.task.id)
+  const present = PRIORITIES.filter((p) => views.some((v) => v.task.priority === p))
+  const gaps = emptyPriorityGaps(present)
+  const last = present[present.length - 1]
+  const onMove = (activeId: string, overId: string) => {
+    const to = droppedPriority(overId)
+    if (!to) return void store.apply(reorderTasks(data, ids, activeId, overId, new Date()))
+    const task = views.find((v) => v.task.id === activeId)?.task
+    if (task) void store.apply(setPriority(data, task, to, new Date()))
+  }
   return (
-    <SortableList
-      ids={ids}
-      strategy={verticalListSortingStrategy}
-      onMove={(a, o) => void store.apply(reorderTasks(data, ids, a, o, new Date()))}
-    >
-      {PRIORITIES.map((p) => {
+    <SortableList ids={ids} strategy={verticalListSortingStrategy} onMove={onMove} onDragging={setDragging}>
+      {present.map((p, i) => {
         const group = views.filter((v) => v.task.priority === p)
-        if (group.length === 0) return null
+        const above = gaps.before[p]
         return (
           <div key={p} className="pl-group">
+            {dragging && above && <PriorityDrops priorities={above} place={i === 0 ? 'top' : 'between'} />}
             <div className={`pl-group-title pl-p-${p}`}>
               <span className="pl-pbadge">{p}</span>
               {PRIORITY_NAME[p]}
@@ -245,9 +267,31 @@ function TaskGroups({ views, data, store, now }: { views: TaskView[]; data: Plan
                 <TaskRow key={v.task.id} view={v} data={data} store={store} now={now} />
               ))}
             </ul>
+            {dragging && p === last && gaps.after.length > 0 && <PriorityDrops priorities={gaps.after} place="bottom" />}
           </div>
         )
       })}
     </SortableList>
+  )
+}
+
+/** 空の優先度の落とし先を横に並べた帯（place: まとまりの上の端・まとまりの間・最後のまとまりの下） */
+function PriorityDrops({ priorities, place }: { priorities: Priority[]; place: 'top' | 'between' | 'bottom' }) {
+  return (
+    <div className={`pl-pdrops pl-pdrops-${place}`} aria-hidden="true">
+      {priorities.map((p) => (
+        <PriorityDrop key={p} priority={p} />
+      ))}
+    </div>
+  )
+}
+
+function PriorityDrop({ priority }: { priority: Priority }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `${PRIORITY_DROP}${priority}` })
+  return (
+    <div ref={setNodeRef} className={`pl-pdrop pl-p-${priority}${isOver ? ' pl-pdrop-over' : ''}`} data-testid={`priority-drop-${priority}`}>
+      <span className="pl-pbadge">{priority}</span>
+      {PRIORITY_NAME[priority]}へ
+    </div>
   )
 }

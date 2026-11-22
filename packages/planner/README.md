@@ -46,6 +46,7 @@ function App() {
 
 - 画面の中で使う React の部品・ドラッグ（@dnd-kit）・アイコン（lucide-react）・linkshelf は、`npm install` で一緒に入ります。React（18・19）は使う側のもの
 - 列を広げた状態や、書きかけの文字は、見る人のブラウザに覚えます（名前は `planner:…`）
+- 時間軸のやることは、ドラッグで並べ替えられます。別の優先度のまとまりへ落とすと、その優先度になります。項目が 1 つも無い優先度（C しか無いときの D・P など）は、**ドラッグしている間だけ、その場所に細い帯**（「D 低へ」）が出て、そこへ落とすと移せます。帯は行の上に重ねて出すので、行は動きません
 - 時間軸は、スマホの幅では列を横にすべらせ、上の帯から列を選べます。プロジェクトは、画面の幅に合わせて段組みになり、カードをドラッグで並べ替えられます（キーボードでも）
 
 ### 習慣を終える（卒業・お休み）・完全に消す
@@ -127,7 +128,7 @@ data = applyChanges(data, toggleDone(data, data.tasks[0], now))
 
 | 分類 | 関数 |
 |---|---|
-| 時間軸 | `buildColumns(data, now)` 列ごとの表示（やること・習慣・明日の欄・来週の欄）／`horizonForDue(due, now)` 期日から列／`effectiveHorizon(task, now)` |
+| 時間軸 | `buildColumns(data, now)` 列ごとの表示（やること・習慣・明日の欄・来週の欄）／`horizonForDue(due, now)` 期日から列／`effectiveHorizon(task, now)`／`emptyPriorityGaps(present)` 空の優先度を、並びのどこに出すか（ドラッグの落とし先） |
 | やること | `newTask` `toggleDone` `placeDown`（今日やる、などで下ろす）`returnUp` `moveTo` `moveStep` `setPriority` `setDue` `removeTask` `reorderTasks` `postponeToTomorrow` `bringToToday` |
 | 習慣 | `newHabit` `toggleHabit` `toggleHabitAll` `placeHabitDown` `habitToTask` `reorderHabits` |
 | 習慣を終える | `endHabit(data, habit, 'graduated' \| 'paused', ひとこと, now)` 卒業・お休み（終えた習慣なら、終え方とひとことだけ変える）／`resumeHabit(data, habit, now)` また始める／`endedHabits(habits)` 終えた習慣を新しい順に。`buildColumns` の列は、終えた習慣を `habits` に入れず `ended` に入れる |

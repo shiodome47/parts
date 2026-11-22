@@ -1561,3 +1561,52 @@
   opacity: 0.5;
   cursor: default;
 }
+/* ─── ドラッグの間だけ出す、空の優先度の落とし先 ─── */
+/* 行の上に重ねて出す（行を動かさない）。帯に落とすと、その優先度に変わる */
+.planner .pl-group {
+  position: relative;
+}
+.planner .pl-pdrops {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  display: flex;
+  gap: 6px;
+  height: 26px;
+  pointer-events: none;
+}
+/* 最初のまとまりの上（見出しの「やること」に重ねる） */
+.planner .pl-pdrops-top {
+  bottom: 100%;
+}
+/* まとまりの間（境めにまたがる） */
+.planner .pl-pdrops-between {
+  top: -13px;
+}
+/* 最後のまとまりの下（「＋ やることを足す」に重ねる） */
+.planner .pl-pdrops-bottom {
+  top: 100%;
+  margin-top: 2px;
+}
+.planner .pl-pdrop {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  border: 1.5px dashed var(--pl-pc);
+  border-radius: 8px;
+  background: linear-gradient(var(--pl-pc-bg), var(--pl-pc-bg)), var(--pl-panel);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+  color: var(--pl-pc);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.planner .pl-pdrop-over {
+  border-style: solid;
+  background: linear-gradient(color-mix(in srgb, var(--pl-pc) 30%, transparent), color-mix(in srgb, var(--pl-pc) 30%, transparent)), var(--pl-panel);
+}
