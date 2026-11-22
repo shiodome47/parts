@@ -1,6 +1,6 @@
 import { addDays, dayKey, daysUntil, HORIZON_HABIT_PERIOD, HORIZON_PERIOD, inSamePeriod, monthDayDate, periodHorizon, periodKey, weekStart } from './period'
 import { autoDue, whenDate } from './when'
-import { HORIZONS, PRIORITIES, type BoardHorizon, type Habit, type Horizon, type MonthDay, type Period, type PlannerData, type Priority, type Project, type Task } from './types'
+import { HORIZONS, PRIORITIES, type BoardHorizon, type Habit, type HabitBreak, type HabitEnd, type Horizon, type MonthDay, type Period, type PlannerData, type Priority, type Project, type Task } from './types'
 
 /**
  * 時間軸ボードの決まりごと（画面に依存しない計算）。
@@ -198,6 +198,8 @@ export interface ColumnView {
   tomorrow: TaskView[]
   /** 今週の列だけ：来週の欄 */
   nextWeek: TaskView[]
+  /** この列の期間の、終えた習慣（卒業・お休み。新しく終えた順）。一番下の「これまでの習慣」に出す */
+  ended: Habit[]
 }
 
 export function buildColumns(data: PlannerData, now: Date): ColumnView[] {
@@ -243,10 +245,12 @@ export function buildColumns(data: PlannerData, now: Date): ColumnView[] {
         dueDay: dueDay ?? whenDate(habit, now),
       }
     }
-    const own = habitPeriod ? data.habits.filter((x) => x.period === habitPeriod).sort(byOrder).map((x) => habitView(x, false)) : []
+    // 終えた習慣（卒業・お休み）は、チェックの一覧には出さない
+    const live = data.habits.filter((x) => !x.endedAt)
+    const own = habitPeriod ? live.filter((x) => x.period === habitPeriod).sort(byOrder).map((x) => habitView(x, false)) : []
     // 毎月の習慣で「その日」が近いもの（今日の列: その日を過ぎてまだのもの／今週の列: その日が今週のもの）
     const autos: HabitView[] = []
-    for (const habit of data.habits.filter((x) => x.period !== habitPeriod).sort(byOrder)) {
+    for (const habit of live.filter((x) => x.period !== habitPeriod).sort(byOrder)) {
       const due = autoDue(habit, h, now)
       if (due) autos.push(habitView(habit, true, due))
     }
@@ -258,6 +262,7 @@ export function buildColumns(data: PlannerData, now: Date): ColumnView[] {
       tasks: numbered(main).map(({ task, label }) => view(task, label)),
       tomorrow: numbered(tomorrow).map(({ task, label }) => view(task, label)),
       nextWeek: numbered(nextWeek).map(({ task, label }) => view(task, label)),
+      ended: habitPeriod ? endedHabits(data.habits.filter((x) => x.period === habitPeriod)) : [],
     }
   })
 }
@@ -437,12 +442,50 @@ export function toggleHabit(habit: Habit, now: Date): Habit {
     return { ...rest, history: history.filter((d) => d !== day), updatedAt: t }
   }
   const today = dayKey(now)
-  const next = history.includes(today) ? history : [...history, today].sort().slice(-HISTORY_LIMIT)
+  const next = history.includes(today) ? history : [...history, today].sort().slice(-HABIT_HISTORY_LIMIT)
   return { ...rest, checkedAt: t, history: next, updatedAt: t }
 }
 
 /** 習慣の記録を残す日数の上限 */
-const HISTORY_LIMIT = 800
+export const HABIT_HISTORY_LIMIT = 800
+
+// ─── 習慣を終える（卒業・お休み）・また始める ─────────────────────
+
+/** 終えた習慣（卒業・お休み）だけを、新しく終えた順に */
+export function endedHabits(habits: Habit[]): Habit[] {
+  return habits.filter((h) => h.endedAt).sort((a, b) => b.endedAt!.localeCompare(a.endedAt!))
+}
+
+/**
+ * 習慣を終える（卒業・お休み）。チェックの記録は残し、時間軸・プロジェクトのチェックの一覧からは外す
+ * （一番下の「これまでの習慣」に出る）。下ろした先で、まだ終えていないやることは消す。
+ * もう終えている習慣なら、終えた日はそのままで、終え方とひとことだけを変える
+ */
+export function endHabit(data: PlannerData, habit: Habit, as: HabitEnd, endNote: string, now: Date): Changes {
+  const t = iso(now)
+  const { endNote: _n, ...rest } = habit
+  const note = endNote.trim()
+  const next: Habit = { ...rest, endedAt: habit.endedAt ?? t, endedAs: as, ...(note ? { endNote: note } : {}), updatedAt: t }
+  const open = habit.endedAt ? [] : data.tasks.filter((x) => x.habitId === habit.id && !x.doneAt && !isExpired(x, now))
+  return { habits: [next], ...(open.length ? { deleteTaskIds: open.map((x) => x.id) } : {}) }
+}
+
+/**
+ * 終えた習慣を、また始める（同じ期間の習慣の一番下へ）。
+ * 終えた日と同じ日なら、終えたのを取り消すだけ。別の日なら、休んでいた間（breaks）を残す
+ * （振り返りで、休んでいた日を「できなかった日」に数えないため）
+ */
+export function resumeHabit(data: PlannerData, habit: Habit, now: Date): Changes {
+  if (!habit.endedAt) return {}
+  const t = iso(now)
+  const { endedAt, endedAs, endNote, breaks: _b, ...rest } = habit
+  const sameDay = dayKey(new Date(endedAt)) === dayKey(now)
+  const gap: HabitBreak = { endedAt, endedAs: endedAs ?? 'paused', ...(endNote ? { endNote } : {}), resumedAt: t }
+  const breaks = sameDay ? (habit.breaks ?? []) : [...(habit.breaks ?? []), gap]
+  const same = data.habits.filter((h) => h.period === habit.period && !h.endedAt && h.id !== habit.id)
+  const order = same.length === 0 ? 0 : Math.max(...same.map((h) => h.order)) + 1
+  return { habits: [{ ...rest, ...(breaks.length ? { breaks } : {}), order, updatedAt: t }] }
+}
 
 // ─── プロジェクト ─────────────────────────────────────────────
 
@@ -689,7 +732,7 @@ export function toggleHabitOnDay(habit: Habit, day: Date, now: Date): Habit {
     const keepCheck = habit.checkedAt && dayKey(new Date(habit.checkedAt)) !== key
     return { ...(keepCheck ? habit : rest), history: next, updatedAt: t }
   }
-  const next = [...history, key].sort().slice(-HISTORY_LIMIT)
+  const next = [...history, key].sort().slice(-HABIT_HISTORY_LIMIT)
   const at = key === dayKey(now) ? now : new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12)
   const check = current && !inSamePeriod(habit.period, habit.checkedAt, now)
   return { ...habit, ...(check ? { checkedAt: iso(at) } : {}), history: next, updatedAt: t }

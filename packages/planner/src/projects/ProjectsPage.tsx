@@ -22,7 +22,7 @@ import {
   toggleHabit,
   topProjects,
 } from '../core'
-import { type PlannerData, type Period, type Project, type Task } from '../core'
+import { endedHabits, type Habit, type PlannerData, type Period, type Project, type Task } from '../core'
 import { PROJECT_COLORS } from './colors'
 import type { PlannerStore } from '../ui/types'
 import { Menu, type MenuItem } from '../ui/Menu'
@@ -31,6 +31,7 @@ import { DueChip } from '../ui/DueChip'
 import { NoteTitle } from '../ui/NoteDialog'
 import { JumpBar, scrollToElement } from '../ui/JumpBar'
 import { WhenSelect } from '../ui/WhenSelect'
+import { EndedHabits, useHabitEnd } from '../ui/EndedHabits'
 
 const PERIODS: Period[] = ['day', 'week', 'month', 'year']
 
@@ -334,17 +335,19 @@ function ProjectBody({
     }
   }
   const [period, setPeriod] = useState<Period>('day')
-  const t = () => new Date().toISOString()
   /** 各行の「メモを開く」「名前を変える」（… のメニューから呼ぶ） */
   const openers: Record<string, { note: () => void; rename: () => void }> = {}
 
   // 期日目標: プロジェクトのやることのうち、下ろした先（コピー）でないもの。
   // 日付の無いものは上に自由な順で、日付のあるものはその下に遠い順（下へ行くほど今日に近い）、終えたものは一番下
   const { open: goals, done } = projectGoals(data, project.id)
-  const routines = data.habits
-    .filter((h) => h.projectId === project.id)
+  const mine = data.habits.filter((h) => h.projectId === project.id)
+  // 終えたルーチン目標（卒業・お休み）は、一番下にたたんでおく
+  const routines = mine
+    .filter((h) => !h.endedAt)
     .sort((a, b) => PERIODS.indexOf(a.period) - PERIODS.indexOf(b.period) || a.order - b.order)
-  const empty = goals.length + done.length + routines.length === 0
+  const ended = endedHabits(mine)
+  const empty = goals.length + done.length + mine.length === 0
 
   if (compact && empty && !open) {
     return (
@@ -396,58 +399,9 @@ function ProjectBody({
       <div className="pl-block">
         <h3 className="pl-block-title">ルーチン目標</h3>
         <ul className="pl-list">
-          {routines.map((r) => {
-            const checked = inSamePeriod(r.period, r.checkedAt, now)
-            return (
-              <li key={r.id} className={`pl-habit${checked ? ' pl-done' : ''}`}>
-                <button
-                  type="button"
-                  role="checkbox"
-                  aria-checked={checked}
-                  aria-label={checked ? `「${r.title}」のチェックを外す` : `「${r.title}」をチェック`}
-                  className="pl-square"
-                  onClick={() => apply({ habits: [toggleHabit(r, now)] })}
-                >
-                  {checked && <Check aria-hidden="true" />}
-                </button>
-                <NoteTitle
-                  title={r.title}
-                  note={r.note}
-                  wrap
-                  renameLabel="ルーチン目標の名前"
-                  menuOpener={(o) => (openers[r.id] = o)}
-                  onRename={(title) => apply({ habits: [{ ...r, title, updatedAt: t() }] })}
-                  onSaveNote={(note) => {
-                    const { note: _n, ...rest } = r
-                    apply({ habits: [{ ...rest, ...(note ? { note } : {}), updatedAt: t() }] })
-                  }}
-                />
-                <select
-                  className="pl-select"
-                  value={r.period}
-                  aria-label={`「${r.title}」のくり返し`}
-                  onChange={(e) => apply({ habits: [{ ...r, period: e.target.value as Period, updatedAt: t() }] })}
-                >
-                  {PERIODS.map((p) => (
-                    <option key={p} value={p}>
-                      {PERIOD_NAME[p]}
-                    </option>
-                  ))}
-                </select>
-                {/* 毎週は曜日・毎月は日（第2水曜 など）・毎年は月と日を決められる。決めると、その日が近いときに時間軸の短い列にも出る */}
-                {r.period !== 'day' && <WhenSelect className="pl-select pl-select-day" habit={r} onChange={(next) => apply({ habits: [next] })} />}
-                <Menu
-                  label={`「${r.title}」の操作`}
-                  items={[
-                    { label: '名前を変える', onSelect: () => openers[r.id]?.rename() },
-                    { label: r.note ? 'メモを見る' : 'メモを書く', onSelect: () => openers[r.id]?.note() },
-                    'separator',
-                    { label: '消す', danger: true, onSelect: () => apply({ deleteHabitIds: [r.id] }) },
-                  ]}
-                />
-              </li>
-            )
-          })}
+          {routines.map((r) => (
+            <RoutineRow key={r.id} r={r} data={data} apply={apply} now={now} />
+          ))}
         </ul>
         <div className="pl-add-row">
           <AddInput
@@ -463,8 +417,69 @@ function ProjectBody({
             ))}
           </select>
         </div>
+        <EndedHabits habits={ended} data={data} store={{ apply }} now={now} label="これまでのルーチン目標" />
       </div>
     </>
+  )
+}
+
+/** ルーチン目標 1 行（チェック・名前・くり返し・その日・…） */
+function RoutineRow({ r, data, apply, now }: { r: Habit; data: PlannerData; apply: Apply; now: Date }) {
+  const t = () => new Date().toISOString()
+  const opener: { note?: () => void; rename?: () => void } = {}
+  // 卒業・お休みにする／完全に消す（と、その小窓）
+  const end = useHabitEnd(r, data, apply)
+  const checked = inSamePeriod(r.period, r.checkedAt, now)
+  return (
+    <li className={`pl-habit${checked ? ' pl-done' : ''}`}>
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={checked}
+        aria-label={checked ? `「${r.title}」のチェックを外す` : `「${r.title}」をチェック`}
+        className="pl-square"
+        onClick={() => apply({ habits: [toggleHabit(r, now)] })}
+      >
+        {checked && <Check aria-hidden="true" />}
+      </button>
+      <NoteTitle
+        title={r.title}
+        note={r.note}
+        wrap
+        renameLabel="ルーチン目標の名前"
+        menuOpener={(o) => Object.assign(opener, o)}
+        onRename={(title) => apply({ habits: [{ ...r, title, updatedAt: t() }] })}
+        onSaveNote={(note) => {
+          const { note: _n, ...rest } = r
+          apply({ habits: [{ ...rest, ...(note ? { note } : {}), updatedAt: t() }] })
+        }}
+      />
+      <select
+        className="pl-select"
+        value={r.period}
+        aria-label={`「${r.title}」のくり返し`}
+        onChange={(e) => apply({ habits: [{ ...r, period: e.target.value as Period, updatedAt: t() }] })}
+      >
+        {PERIODS.map((p) => (
+          <option key={p} value={p}>
+            {PERIOD_NAME[p]}
+          </option>
+        ))}
+      </select>
+      {/* 毎週は曜日・毎月は日（第2水曜 など）・毎年は月と日を決められる。決めると、その日が近いときに時間軸の短い列にも出る */}
+      {r.period !== 'day' && <WhenSelect className="pl-select pl-select-day" habit={r} onChange={(next) => apply({ habits: [next] })} />}
+      <Menu
+        label={`「${r.title}」の操作`}
+        items={[
+          { label: '名前を変える', onSelect: () => opener.rename?.() },
+          { label: r.note ? 'メモを見る' : 'メモを書く', onSelect: () => opener.note?.() },
+          end.items[0],
+          'separator',
+          end.items[1],
+        ]}
+      />
+      {end.dialogs}
+    </li>
   )
 }
 

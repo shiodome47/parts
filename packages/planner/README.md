@@ -48,6 +48,19 @@ function App() {
 - 列を広げた状態や、書きかけの文字は、見る人のブラウザに覚えます（名前は `planner:…`）
 - 時間軸は、スマホの幅では列を横にすべらせ、上の帯から列を選べます。プロジェクトは、画面の幅に合わせて段組みになり、カードをドラッグで並べ替えられます（キーボードでも）
 
+### 習慣を終える（卒業・お休み）・完全に消す
+
+習慣（ルーチン目標）の … から選びます。
+
+| 操作 | どうなるか |
+|---|---|
+| **卒業・お休みにする…** | 「卒業（身についた）」か「お休み（続かなかった・今はやめる）」を選び、ひとこと（理由など。なくてもよい）を添える。チェックの一覧からは外れ、習慣の一番下の **「これまでの習慣（n）」**（はじめは閉じている）に残る。チェックの記録は消えない。下ろした先の、まだ終えていないやることは消える |
+| これまでの習慣の … →「また始める」 | チェックの一覧の一番下へ戻す。終えた日と別の日なら、休んでいた間を覚えておき、振り返りの数に入れない |
+| これまでの習慣の … →「卒業・お休みを変える…」 | 終え方とひとことを直す（終えた日はそのまま） |
+| **完全に消す** | 記録ごと消す（元に戻せない）。チェックの記録があるときは、確かめてから消す |
+
+「これまでの習慣」の 1 行には、卒業（🎓）かお休み（🌙）の印・名前・期間（9/1〜11/22）・できた割合（毎日なら「できた日 82%」。毎週なら週で数える）・ひとことが出ます。時間軸では各列の習慣の一番下、プロジェクトではルーチン目標の一番下（「これまでのルーチン目標」）です。
+
 ### 色を合わせる
 
 見た目は `.planner` の中だけに効き、色は変数で決まります。使う側の CSS で上書きすると、アプリの色に合わせられます。
@@ -79,7 +92,7 @@ const data: PlannerData = { tasks: [], habits: [], projects: [] }
 | 形 | 中身 |
 |---|---|
 | `Task` | やること。`horizon`（列）・`priority`（A〜D・P）・`due`（期日 YYYY-MM-DD）・`projectId` など |
-| `Habit` | 習慣（くり返し）。`period`（毎日・毎週・毎月・毎年）と「その日」（`weekday`・`day`・`yearDay`） |
+| `Habit` | 習慣（くり返し）。`period`（毎日・毎週・毎月・毎年）と「その日」（`weekday`・`day`・`yearDay`）。終えたら `endedAt`・`endedAs`（`'graduated'` 卒業／`'paused'` お休み）・`endNote`（ひとこと）。また始めたら、休んでいた間を `breaks` に残す |
 | `Project` | プロジェクト・テーマ。テーマの中にプロジェクトを入れられる（1 段だけ） |
 
 アプリは、`PlannerData` に自分の項目（日記など）を足した形で持って構いません。土台の関数は、足した項目を変えずに残します。
@@ -117,9 +130,10 @@ data = applyChanges(data, toggleDone(data, data.tasks[0], now))
 | 時間軸 | `buildColumns(data, now)` 列ごとの表示（やること・習慣・明日の欄・来週の欄）／`horizonForDue(due, now)` 期日から列／`effectiveHorizon(task, now)` |
 | やること | `newTask` `toggleDone` `placeDown`（今日やる、などで下ろす）`returnUp` `moveTo` `moveStep` `setPriority` `setDue` `removeTask` `reorderTasks` `postponeToTomorrow` `bringToToday` |
 | 習慣 | `newHabit` `toggleHabit` `toggleHabitAll` `placeHabitDown` `habitToTask` `reorderHabits` |
+| 習慣を終える | `endHabit(data, habit, 'graduated' \| 'paused', ひとこと, now)` 卒業・お休み（終えた習慣なら、終え方とひとことだけ変える）／`resumeHabit(data, habit, now)` また始める／`endedHabits(habits)` 終えた習慣を新しい順に。`buildColumns` の列は、終えた習慣を `habits` に入れず `ended` に入れる |
 | くり返しの「その日」 | 毎月: `withDay(habit, 20 \| 'end' \| 'w2-3' \| 'wL-5')`／毎週・毎年: `withWhen(habit, 3 \| '12-06' \| '12')`／`whenLabel` `whenDate` `monthDayDate` |
 | プロジェクト | `newProject` `topProjects` `childProjects` `moveProject` `removeProject` `reorderProjects` `projectGoals` `reorderGoals` |
-| 振り返り | `doneOn(data, day, now)` その日に済ませたこと／`streak(habit, now)` 続いた日数／`toggleHabitOnDay` `finishOnDay`（過ぎた日に付け直す） |
+| 振り返り | `doneOn(data, day, now)` その日に済ませたこと／`streak(habit, now)` 続いた日数／`toggleHabitOnDay` `finishOnDay`（過ぎた日に付け直す）／`habitActiveOn(habit, day)` その日に続けていたか（始める前・終えたあと・休んでいた間は数えない。「毎日 3/4」の分母に使う）／`habitRecord(habit, now)` 始めてから終えるまでの、できた数と期間の数 |
 | 日付 | `dayKey` `weekKey` `weekStart` `addDays` `periodLabel` `dueLabel` `shortDueLabel` |
 | 当てる | `applyChanges(data, changes)` ／ `mergeById(list, puts, deleteIds)` |
 
@@ -127,7 +141,7 @@ data = applyChanges(data, toggleDone(data, data.tasks[0], now))
 
 ## English
 
-Building blocks for a timeline (today / this week / months / this year / life) and projects, taken from the Magic Lamp app. Screens: `<Timeline data now onChange />` (`@shiodome47/planner/timeline`) and `<Projects data now onChange />` (`@shiodome47/planner/projects`); import `@shiodome47/planner/style.css`. Styles apply only inside `.planner`; override `--pl-*` variables to match your app. `@shiodome47/planner/core` holds the data model (`Task`, `Habit`, `Project`, `PlannerData`) and the rules — which column a dated task belongs to, the next date of a recurring habit ("2nd Sunday of each month", "every December 6"), placing, finishing and reordering, and review helpers. Functions never mutate data; they return `Changes`, which you save wherever you like and apply locally with `applyChanges`. Pass the current time (`now`) explicitly. UI labels are Japanese.
+Building blocks for a timeline (today / this week / months / this year / life) and projects, taken from the Magic Lamp app. Screens: `<Timeline data now onChange />` (`@shiodome47/planner/timeline`) and `<Projects data now onChange />` (`@shiodome47/planner/projects`); import `@shiodome47/planner/style.css`. Styles apply only inside `.planner`; override `--pl-*` variables to match your app. `@shiodome47/planner/core` holds the data model (`Task`, `Habit`, `Project`, `PlannerData`) and the rules — which column a dated task belongs to, the next date of a recurring habit ("2nd Sunday of each month", "every December 6"), placing, finishing and reordering, and review helpers. Habits can be ended as "graduated" or "paused" (`endHabit` / `resumeHabit`); their check history is kept, they move to a collapsed "past habits" list, and `habitActiveOn` / `habitRecord` count only the days a habit was active. Functions never mutate data; they return `Changes`, which you save wherever you like and apply locally with `applyChanges`. Pass the current time (`now`) explicitly. UI labels are Japanese.
 
 ## License
 

@@ -15,8 +15,12 @@ export interface ProjectCardItem extends CardLike {
 
 /** カードの大きさの目安（中の行の数。中のプロジェクトは、見出しの分も足す） */
 export function cardSize(data: PlannerData, project: Project): number {
-  const own = (p: Project) =>
-    data.tasks.filter((t) => isProjectGoal(t) && t.projectId === p.id).length + data.habits.filter((h) => h.projectId === p.id).length
+  const own = (p: Project) => {
+    const habits = data.habits.filter((h) => h.projectId === p.id)
+    // 終えたルーチン目標は、たたんだ 1 行（「これまでのルーチン目標」）の分だけ
+    const live = habits.filter((h) => !h.endedAt).length
+    return data.tasks.filter((t) => isProjectGoal(t) && t.projectId === p.id).length + live + (live < habits.length ? 1 : 0)
+  }
   return own(project) + childProjects(data, project.id).reduce((n, c) => n + 3 + own(c), 0)
 }
 

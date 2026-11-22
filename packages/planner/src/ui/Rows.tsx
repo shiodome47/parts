@@ -30,6 +30,7 @@ import { DueChip } from './DueChip'
 import { WhenSelect } from './WhenSelect'
 import { isMonthOnly, whenLabel } from '../core'
 import { NoteDialog, useClickOrDouble } from './NoteDialog'
+import { useHabitEnd } from './EndedHabits'
 
 /** やること 1 行（番号・丸いチェック・名前・下ろすボタン・…） */
 export function TaskRow({
@@ -220,6 +221,8 @@ export function HabitRow({ view, data, store, now }: { view: HabitView; data: Pl
   const quick = auto ? undefined : quickTarget(periodHorizon(habit.period))
   const overdue = auto && dueDay && !isMonthOnly(habit) && dayKey(dueDay) < dayKey(now)
   const when = whenLabel(habit)
+  // 卒業・お休みにする／完全に消す（と、その小窓）
+  const end = useHabitEnd(habit, data, apply)
 
   return (
     <li
@@ -295,10 +298,12 @@ export function HabitRow({ view, data, store, now }: { view: HabitView; data: Pl
           { label: habit.note ? 'メモを見る' : 'メモを書く', onSelect: () => setNoteOpen(true) },
           ...(habit.period !== 'day' ? [{ label: when ? `${WHEN_NAME[habit.period]}を変える（${when}）` : `${WHEN_NAME[habit.period]}を決める`, onSelect: () => setDayEditing(true) }] : []),
           { label: 'やることに移す（1 回で終わるもの）', onSelect: () => apply(habitToTask(data, habit, now)) },
+          end.items[0],
           'separator',
-          { label: '消す', danger: true, onSelect: () => apply({ deleteHabitIds: [habit.id] }) },
+          end.items[1],
         ]}
       />
+      {end.dialogs}
       <NoteDialog
         open={noteOpen}
         title={habit.title}
