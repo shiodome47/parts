@@ -81,8 +81,31 @@ export interface Habit {
    */
   yearDay?: string
   projectId?: string
+  /**
+   * 終えた日時（卒業・お休み）。あれば時間軸・プロジェクトのチェックの一覧には出さず、
+   * 一番下の「これまでの習慣」に出す。チェックの記録（history）は消さない
+   */
+  endedAt?: string
+  /** どう終えたか（endedAt と一緒に付ける） */
+  endedAs?: HabitEnd
+  /** 終えたときのひとこと（理由・気づいたこと） */
+  endNote?: string
+  /** 前に終えて、また始めたときの記録（古い順）。休んでいた間は、振り返りの数に入れない */
+  breaks?: HabitBreak[]
   createdAt: string
   updatedAt: string
+}
+
+/** 習慣の終え方。graduated 卒業（身についた）／paused お休み（続かなかった・今はやめる） */
+export type HabitEnd = 'graduated' | 'paused'
+
+/** 習慣を終えて、また始めるまでの間 */
+export interface HabitBreak {
+  endedAt: string
+  endedAs: HabitEnd
+  endNote?: string
+  /** また始めた日時 */
+  resumedAt: string
 }
 
 /** 毎月の「その日」（Habit.day） */

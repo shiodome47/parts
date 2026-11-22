@@ -10,6 +10,7 @@ import { PRIORITIES, type PlannerData, type Priority } from '../core'
 import type { PlannerStore } from '../ui/types'
 import { AddInput, HabitRow, TaskRow } from '../ui/Rows'
 import { JumpBar, scrollToElement } from '../ui/JumpBar'
+import { EndedHabits } from '../ui/EndedHabits'
 
 /** 広げている列（この端末だけに覚えておく） */
 const WIDE_KEY = 'planner:wideColumn'
@@ -164,6 +165,8 @@ function Column({
             label={`${HORIZON_NAME[h]}の習慣を足す`}
             onAdd={(title) => void store.apply({ habits: [newHabit(data, { title, period: col.habitPeriod! }, now)] })}
           />
+          {/* 終えた習慣（卒業・お休み）は、一番下にたたんでおく */}
+          <EndedHabits habits={col.ended} data={data} store={store} now={now} />
         </div>
       )}
 

@@ -1,5 +1,5 @@
 import { addDays, dayKey, periodKey } from './period'
-import { effectiveHorizon } from './logic'
+import { effectiveHorizon, HABIT_HISTORY_LIMIT } from './logic'
 import type { Habit, Horizon, PlannerData, Project, Task } from './types'
 
 /**
@@ -24,6 +24,84 @@ export function habitDoneOn(habit: Habit, day: Date): boolean {
     if (periodKey(habit.period, new Date(y, m - 1, dd)) === key) return true
   }
   return false
+}
+
+/** 日時（ISO）を日付（YYYY-MM-DD）に。読めなければ undefined */
+function isoDay(at: string | undefined): string | undefined {
+  if (!at) return undefined
+  const d = new Date(at)
+  return Number.isNaN(d.getTime()) ? undefined : dayKey(d)
+}
+
+/** 習慣を始めた日（記録が上限まであって古い分が消えているときは、残っている一番古い日から） */
+function startDay(habit: Habit, days: Set<string>): string {
+  const created = isoDay(habit.createdAt) ?? ''
+  const history = habit.history ?? []
+  const first = [...days].sort()[0]
+  if (history.length >= HABIT_HISTORY_LIMIT && history[0] > created) return history[0]
+  // 始めた日より前の日にチェックを付け直したときは、その日から
+  return first && first < created ? first : created
+}
+
+/** その日に続けていたか（days は habitDays の結果。何度も数えるときに作り直さないように受け取る） */
+function activeOn(habit: Habit, days: Set<string>, key: string, start: string): boolean {
+  // チェックがある日は、いつでも数える
+  if (days.has(key)) return true
+  if (key < start) return false
+  const ended = isoDay(habit.endedAt)
+  if (ended && key >= ended) return false
+  return !(habit.breaks ?? []).some((b) => {
+    const from = isoDay(b.endedAt)
+    const to = isoDay(b.resumedAt)
+    return !!from && !!to && key >= from && key < to
+  })
+}
+
+/**
+ * その日に、その習慣を続けていたか（振り返り・カレンダーの「毎日 3/4」の数に入れるか）。
+ * 始めた日より前・終えた日（卒業・お休み）から後・休んでいた間は数えない。チェックがある日は数える
+ */
+export function habitActiveOn(habit: Habit, day: Date): boolean {
+  const days = habitDays(habit)
+  return activeOn(habit, days, dayKey(day), startDay(habit, days))
+}
+
+export interface HabitRecord {
+  /** 始めた日 */
+  start: Date
+  /** 終えた日（終えていなければ無し） */
+  end?: Date
+  /** 続けていた期間（毎日なら日、毎週なら週…）のうち、できた数 */
+  done: number
+  /** 続けていた期間の数 */
+  total: number
+}
+
+/**
+ * 習慣の、始めてから終えるまで（終えていなければ今日まで）の記録。
+ * 休んでいた間は数えない。最後の期間（終えた日・今日を含む日・週…）は、できていれば数える
+ */
+export function habitRecord(habit: Habit, now: Date): HabitRecord {
+  const days = habitDays(habit)
+  const start = startDay(habit, days)
+  const at = habit.endedAt ? new Date(habit.endedAt) : undefined
+  const endAt = at && !Number.isNaN(at.getTime()) ? at : undefined
+  const last = endAt ?? now
+  const lastKey = dayKey(last)
+  const [y, m, d] = (start || lastKey).split('-').map(Number)
+  const all = new Set<string>()
+  const done = new Set<string>()
+  for (let day = new Date(y, m - 1, d); dayKey(day) <= lastKey; day = addDays(day, 1)) {
+    const key = dayKey(day)
+    if (!activeOn(habit, days, key, start)) continue
+    const p = periodKey(habit.period, day)
+    all.add(p)
+    if (days.has(key)) done.add(p)
+  }
+  // 最後の期間は、まだ途中（または途中で終えた）なので、できたときだけ数える
+  const lastPeriod = periodKey(habit.period, last)
+  if (!done.has(lastPeriod)) all.delete(lastPeriod)
+  return { start: new Date(y, m - 1, d), ...(endAt ? { end: endAt } : {}), done: done.size, total: all.size }
 }
 
 /** 続いている日数（毎日の習慣だけ。今日まだなら昨日から数える） */
