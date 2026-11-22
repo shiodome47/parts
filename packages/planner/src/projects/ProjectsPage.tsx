@@ -35,6 +35,7 @@ import { JumpBar, scrollToElement } from '../ui/JumpBar'
 import { WhenSelect } from '../ui/WhenSelect'
 import { EndedHabits, useHabitEnd } from '../ui/EndedHabits'
 import { BreakdownChip, BreakdownOf, SplitGoalDialog, jumpToProject } from './Breakdown'
+import { CountControl, useCountMenu } from '../ui/Count'
 
 const PERIODS: Period[] = ['day', 'week', 'month', 'year']
 
@@ -525,6 +526,8 @@ function GoalRow({
   // 目標を細かく分ける（中身のプロジェクト）
   const [splitting, setSplitting] = useState(false)
   const inner = goalBreakdown(data, g)
+  // 回数の目標（30/100 回 ＋1）のメニューと小窓
+  const count = useCountMenu(g, data, apply)
   const title = (
     <NoteTitle
       title={g.title}
@@ -566,11 +569,14 @@ function GoalRow({
                   apply({ tasks: [value ? { ...rest, due: value, updatedAt: t() } : { ...rest, updatedAt: t() }] })
                 }}
               />
-              {/* 中身があれば、名前の下に進み具合（名前の幅を狭めないように） */}
-              {inner ? (
+              {/* 回数・中身があれば、名前の下に（名前の幅を狭めないように） */}
+              {inner || g.count ? (
                 <div className="pl-goal-main">
                   {title}
-                  <BreakdownChip goal={g} data={data} />
+                  <div className="pl-goal-meta">
+                    <CountControl task={g} data={data} apply={apply} />
+                    <BreakdownChip goal={g} data={data} />
+                  </div>
                 </div>
               ) : (
                 title
@@ -580,6 +586,7 @@ function GoalRow({
                 items={[
                   { label: '名前を変える', onSelect: () => openers[g.id]?.rename() },
                   { label: g.note ? 'メモを見る' : 'メモを書く', onSelect: () => openers[g.id]?.note() },
+                  ...count.items,
                   ...(inner
                     ? [
                         { label: `中身「${inner.project.name}」へ移動`, onSelect: () => jumpToProject(inner.project.id) },
@@ -591,6 +598,7 @@ function GoalRow({
                 ]}
               />
               {splitting && <SplitGoalDialog goal={g} data={data} apply={apply} onClose={() => setSplitting(false)} />}
+              {count.dialog}
             </li>
   )
 }

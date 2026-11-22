@@ -31,6 +31,7 @@ import { WhenSelect } from './WhenSelect'
 import { isMonthOnly, whenLabel } from '../core'
 import { NoteDialog, useClickOrDouble } from './NoteDialog'
 import { useHabitEnd } from './EndedHabits'
+import { CountControl, useCountMenu } from './Count'
 
 /** やること 1 行（番号・丸いチェック・名前・下ろすボタン・…） */
 export function TaskRow({
@@ -56,6 +57,8 @@ export function TaskRow({
   const targets = placeTargets(view.horizon)
   const quick = quickTarget(view.horizon)
   const apply = (c: Parameters<PlannerStore['apply']>[0]) => void store.apply(c)
+  // 回数の目標（30/100 回 ＋1）のメニューと小窓
+  const count = useCountMenu(task, data, apply)
   // 今日の列: 今日の分は「明日へ」、明日の欄のものは「今日へ」
   const inToday = view.horizon === 'today' && !done && !faded
   const forTomorrow = inToday && isForTomorrow(task, now)
@@ -78,6 +81,7 @@ export function TaskRow({
         ]
       : []),
     { label: task.note ? 'メモを見る' : 'メモを書く', onSelect: () => setNoteOpen(true) },
+    ...count.items,
     'separator',
     ...(task.parentId || task.habitId ? [{ label: `${from ? HORIZON_NAME[from as BoardHorizon] ?? '元' : '元'}に戻す`, onSelect: () => apply(returnUp(data, task, now)) }] : []),
     { label: '消す', danger: true, onSelect: () => apply(removeTask(data, task, now)) },
@@ -137,6 +141,7 @@ export function TaskRow({
             ) : (
               task.due && <span className="pl-chip">{dueLabelWeekday(task.due, now)}</span>
             )}
+            <CountControl task={task} data={data} apply={apply} />
           </span>
         )}
       </div>
@@ -199,6 +204,7 @@ export function TaskRow({
           apply({ tasks: [{ ...rest, ...(note ? { note } : {}), updatedAt: new Date().toISOString() }] })
         }}
       />
+      {count.dialog}
     </li>
   )
 }

@@ -142,6 +142,22 @@ export function doneOn(data: PlannerData, day: Date, now: Date): DoneItem[] {
     }))
 }
 
+export interface CountItem {
+  task: Task
+  /** その日に足した回数（へらしたときは負） */
+  added: number
+  project?: Project
+}
+
+/** その日に回数を足した、回数の目標（振り返りの「やったこと」に、終えたものと並べて出す） */
+export function countsOn(data: PlannerData, day: Date): CountItem[] {
+  const key = dayKey(day)
+  const projects = new Map(data.projects.map((p) => [p.id, p]))
+  return data.tasks
+    .filter((t) => t.count?.log?.[key])
+    .map((task) => ({ task, added: task.count!.log![key], project: task.projectId ? projects.get(task.projectId) : undefined }))
+}
+
 /** 直近 n 日（古い順。最後が今日） */
 export function lastDays(now: Date, n: number): Date[] {
   return Array.from({ length: n }, (_, i) => addDays(now, i - n + 1))
