@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { applyChanges, newHabit, newProject, newTask, toggleHabit, type Changes, type PlannerData } from '../../core'
 import { Timeline } from '../index'
@@ -42,6 +42,25 @@ describe('<Timeline>', () => {
   it('すっきり表示（simple）は、外枠に pl-simple を付ける', () => {
     const { container } = render(<Timeline data={sample()} now={NOW} onChange={() => {}} simple />)
     expect(container.firstElementChild?.classList.contains('pl-simple')).toBe(true)
+  })
+})
+
+describe('空の優先度へドラッグで移す', () => {
+  it('ドラッグしている間だけ、空の優先度（A・C・D・P）の落とし先を出す', async () => {
+    // 今日の列は「総会の資料」（A）だけ。キーボードでつかむ（スペース）と、B〜P の帯が出る
+    let d: PlannerData = { tasks: [], habits: [], projects: [] }
+    d = applyChanges(d, { tasks: [newTask(d, { title: '回覧板', horizon: 'today', priority: 'B' }, NOW)] })
+    render(<Timeline data={d} now={NOW} onChange={() => {}} />)
+    expect(screen.queryByTestId('priority-drop-A')).toBeNull()
+    const row = screen.getByText('回覧板').closest('li')!
+    row.focus()
+    fireEvent.keyDown(row, { code: 'Space', key: ' ' })
+    for (const p of ['A', 'C', 'D', 'P']) expect(screen.getByTestId(`priority-drop-${p}`)).toBeTruthy()
+    expect(screen.queryByTestId('priority-drop-B')).toBeNull()
+    // やめる（Esc）と消える（キーボードの合図は、つかんだ少しあとから受け付ける）
+    await act(() => new Promise((r) => setTimeout(r, 0)))
+    fireEvent.keyDown(document, { code: 'Escape', key: 'Escape' })
+    expect(screen.queryByTestId('priority-drop-A')).toBeNull()
   })
 })
 

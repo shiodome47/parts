@@ -141,6 +141,27 @@ export function quickTarget(h: Horizon): PlaceTarget | undefined {
   return placeTargets(h).filter((t) => t !== 'tomorrow' && t !== 'nextweek').at(-1)
 }
 
+/**
+ * ドラッグで移せる、空の優先度の場所（項目が 1 つも無い優先度にも、ドラッグで移せるように）。
+ * present は、項目のある優先度（A → P の順）。空の優先度を、並びの間に割り当てる。
+ * before[p]: p のまとまりのすぐ上に出すもの／after: 最後のまとまりの下に出すもの。
+ * 例: present が B・C なら、before.B = [A]、after = [D, P]
+ */
+export function emptyPriorityGaps(present: Priority[]): { before: Partial<Record<Priority, Priority[]>>; after: Priority[] } {
+  const has = new Set(present)
+  const before: Partial<Record<Priority, Priority[]>> = {}
+  let waiting: Priority[] = []
+  for (const p of PRIORITIES) {
+    if (!has.has(p)) {
+      waiting.push(p)
+      continue
+    }
+    if (waiting.length) before[p] = waiting
+    waiting = []
+  }
+  return { before, after: has.size ? waiting : [] }
+}
+
 /** 優先度ごと・順番どおりに並べ、番号（A1 など）を付ける */
 export function numbered(tasks: Task[]): { task: Task; label: string }[] {
   const out: { task: Task; label: string }[] = []

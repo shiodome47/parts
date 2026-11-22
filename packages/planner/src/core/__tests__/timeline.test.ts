@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyChanges,
   buildColumns,
+  emptyPriorityGaps,
   childProjects,
   nextGoalOrder,
   projectGoals,
@@ -66,6 +67,19 @@ describe('番号', () => {
     d = add(d, '二', 'today', 'A')
     d = applyChanges(d, moveStep(d, find(d, '二'), -1, TUE))
     expect(titles(d, 'today')).toEqual(['A1 二', 'A2 一'])
+  })
+})
+
+describe('空の優先度へドラッグで移す場所', () => {
+  it('並んでいる優先度の間に、空の優先度を割り当てる', () => {
+    // B・C だけ → B の上に A、C の下に D・P
+    expect(emptyPriorityGaps(['B', 'C'])).toEqual({ before: { B: ['A'] }, after: ['D', 'P'] })
+    // A・C → A と C の間に B（C の上）
+    expect(emptyPriorityGaps(['A', 'C'])).toEqual({ before: { C: ['B'] }, after: ['D', 'P'] })
+    // 全部ある → 空の場所は無い
+    expect(emptyPriorityGaps(['A', 'B', 'C', 'D', 'P'])).toEqual({ before: {}, after: [] })
+    // 何も無い → 出さない（ドラッグする行が無い）
+    expect(emptyPriorityGaps([])).toEqual({ before: {}, after: [] })
   })
 })
 
