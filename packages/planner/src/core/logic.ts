@@ -433,7 +433,17 @@ export function setPriority(data: PlannerData, task: Task, priority: Priority, n
 
 /** 消す（下ろした先も一緒に消す） */
 export function removeTask(data: PlannerData, task: Task, now: Date): Changes {
-  return { deleteTaskIds: [task.id, ...descendantsOf(data.tasks, task.id, now)] }
+  const ids = [task.id, ...descendantsOf(data.tasks, task.id, now)]
+  // 消す目標を「中身」にしていたプロジェクトは、つなぎだけ外す（プロジェクトは残す）
+  const projects = unlinkedFrom(data, new Set(ids), now)
+  return { deleteTaskIds: ids, ...(projects.length ? { projects } : {}) }
+}
+
+/** 消える目標（ids）を中身にしていたプロジェクトの、つなぎを外したもの */
+function unlinkedFrom(data: PlannerData, ids: Set<string>, now: Date, except = new Set<string>()): Project[] {
+  return data.projects
+    .filter((p) => p.goalId && ids.has(p.goalId) && !except.has(p.id))
+    .map(({ goalId: _g, ...rest }) => ({ ...rest, updatedAt: iso(now) }))
 }
 
 // ─── 習慣 ───────────────────────────────────────────────────
@@ -536,13 +546,77 @@ export function topProjects(data: PlannerData): Project[] {
 }
 
 /** プロジェクトを消す（期日目標・ルーチン目標も一緒に。列に置いたものも消す。テーマなら中のプロジェクトも） */
-export function removeProject(data: PlannerData, project: Project): Changes {
+export function removeProject(data: PlannerData, project: Project, now = new Date()): Changes {
   const ids = new Set([project.id, ...childProjects(data, project.id).map((p) => p.id)])
+  const deleteTaskIds = data.tasks.filter((t) => t.projectId && ids.has(t.projectId)).map((t) => t.id)
+  // 消える目標を「中身」にしていた、ほかのプロジェクトは、つなぎだけ外す
+  const projects = unlinkedFrom(data, new Set(deleteTaskIds), now, ids)
   return {
     deleteProjectIds: [...ids],
-    deleteTaskIds: data.tasks.filter((t) => t.projectId && ids.has(t.projectId)).map((t) => t.id),
+    deleteTaskIds,
     deleteHabitIds: data.habits.filter((h) => h.projectId && ids.has(h.projectId)).map((h) => h.id),
+    ...(projects.length ? { projects } : {}),
   }
+}
+
+// ─── 目標を細かく分ける（中身のプロジェクト） ─────────────────────
+
+/** その目標の「中身」のプロジェクトと、その進み具合（中身の期日目標のうち、終えた数／全部） */
+export function goalBreakdown(data: PlannerData, goal: Task): { project: Project; done: number; total: number } | undefined {
+  const project = data.projects.find((p) => p.goalId === goal.id)
+  if (!project) return undefined
+  const goals = data.tasks.filter((t) => isProjectGoal(t) && t.projectId === project.id)
+  return { project, done: goals.filter((t) => t.doneAt).length, total: goals.length }
+}
+
+/** そのプロジェクトが「中身」になっている目標と、その目標のプロジェクト（無い・消えたなら undefined） */
+export function breakdownOf(data: PlannerData, project: Project): { goal: Task; project: Project } | undefined {
+  const goal = project.goalId ? data.tasks.find((t) => t.id === project.goalId) : undefined
+  const owner = goal?.projectId ? data.projects.find((p) => p.id === goal.projectId) : undefined
+  return goal && owner ? { goal, project: owner } : undefined
+}
+
+/**
+ * 目標を細かく分ける: その目標の「中身」になるプロジェクトを新しく作る。
+ * 置き場所は、入れ子が 1 段のままになるように、目標のプロジェクトと同じテーマの中（目標のプロジェクトのすぐ後ろ）。
+ * 目標のプロジェクトがいちばん上のカードなら、その中（テーマになる）
+ */
+export function splitGoal(data: PlannerData, goal: Task, name: string, now: Date): Changes {
+  const owner = data.projects.find((p) => p.id === goal.projectId)
+  if (!owner || goalBreakdown(data, goal)) return {}
+  const parentId = owner.parentId ?? owner.id
+  const t = iso(now)
+  const created: Project = { ...newProject(data, { name, color: owner.color, parentId }, now), goalId: goal.id }
+  // 同じテーマの中で、目標のプロジェクトのすぐ後ろへ（並びを振り直す）
+  const siblings = data.projects.filter((p) => p.parentId === parentId).sort((a, b) => a.order - b.order)
+  const at = owner.parentId ? siblings.findIndex((p) => p.id === owner.id) + 1 : siblings.length
+  const ordered = [...siblings.slice(0, at), created, ...siblings.slice(at)]
+  const projects = ordered
+    .map((p, order) => (p.id === created.id ? { ...p, order } : p.order === order ? undefined : { ...p, order, updatedAt: t }))
+    .filter((p): p is Project => !!p)
+  return { projects }
+}
+
+/** 目標の中身にできる、今あるプロジェクト（目標のプロジェクト・それを入れたテーマ・もう別の目標の中身のものは除く） */
+export function linkableProjects(data: PlannerData, goal: Task): Project[] {
+  const owner = data.projects.find((p) => p.id === goal.projectId)
+  return data.projects.filter((p) => p.id !== owner?.id && p.id !== owner?.parentId && !p.goalId)
+}
+
+/** 今あるプロジェクトを、目標の「中身」にする（目標の中身は 1 つだけ。前の中身のつなぎは外す） */
+export function linkGoal(data: PlannerData, goal: Task, project: Project, now: Date): Changes {
+  const t = iso(now)
+  const before = data.projects
+    .filter((p) => p.goalId === goal.id && p.id !== project.id)
+    .map(({ goalId: _g, ...rest }) => ({ ...rest, updatedAt: t }))
+  return { projects: [...before, { ...project, goalId: goal.id, updatedAt: t }] }
+}
+
+/** 目標とのつなぎを外す（プロジェクトも目標も、そのまま残る） */
+export function unlinkGoal(project: Project, now: Date): Changes {
+  if (!project.goalId) return {}
+  const { goalId: _g, ...rest } = project
+  return { projects: [{ ...rest, updatedAt: iso(now) }] }
 }
 
 /**

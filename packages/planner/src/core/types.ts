@@ -124,6 +124,11 @@ export interface Project {
   parentId?: string
   /** プロジェクトの画面で置いた列（0 から。ドラッグで決める。無ければ、いちばん短い列へ自動で詰める） */
   column?: number
+  /**
+   * このプロジェクトが「中身」になっている期日目標の id（目標を細かく分けたもの）。
+   * 目標の行に中身の進み具合が出て、このプロジェクトには、どの目標の中身かが出る
+   */
+  goalId?: string
   createdAt: string
   updatedAt: string
 }
