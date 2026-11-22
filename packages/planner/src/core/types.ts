@@ -51,8 +51,20 @@ export interface Task {
   doneAt?: string
   /** メモ（名前を押すと開く） */
   note?: string
+  /** 回数の目標（例: リーディング 100 回）。回数がめざす数に届くと、終えたことになる */
+  count?: TaskCount
   createdAt: string
   updatedAt: string
+}
+
+/** 回数の目標（Task.count） */
+export interface TaskCount {
+  /** めざす回数（1 以上） */
+  target: number
+  /** 今の回数 */
+  done: number
+  /** 日ごとに足した回数（YYYY-MM-DD → その日に足した数）。振り返りに使う */
+  log?: Record<string, number>
 }
 
 /** 習慣（ルーチン目標もこれ） */

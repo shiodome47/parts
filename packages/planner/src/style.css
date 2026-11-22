@@ -1709,3 +1709,75 @@
 .planner .pl-goal-main > .pl-title-button {
   align-self: stretch;
 }
+/* ─── 回数の目標（30/100 回 ＋1） ─── */
+.planner .pl-goal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.planner .pl-count-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+/* 回数（うしろの色の帯が、進み具合） */
+.planner .pl-count-value {
+  --pl-count-pct: 0%;
+  padding: 1px 8px;
+  border: 1px solid var(--pl-border);
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--pl-accent) 22%, transparent) var(--pl-count-pct),
+    var(--pl-panel-2) var(--pl-count-pct)
+  );
+  color: var(--pl-text);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.planner .pl-count-finished .pl-count-value {
+  border-color: var(--pl-ok);
+  color: var(--pl-ok);
+}
+.planner .pl-count-plus {
+  min-width: 34px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--pl-accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--pl-accent);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.planner .pl-count-plus:hover {
+  background: color-mix(in srgb, var(--pl-accent) 12%, transparent);
+}
+.planner .pl-count-plus:active {
+  background: var(--pl-accent);
+  color: var(--pl-accent-text);
+}
+.planner .pl-count-plus:focus-visible {
+  outline: 2px solid var(--pl-accent);
+  outline-offset: 1px;
+}
+/* 回数の小窓 */
+.planner .pl-count-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.planner .pl-count-field {
+  display: grid;
+  gap: 4px;
+  color: var(--pl-muted);
+  font-size: 12px;
+}
+.planner .pl-count-stop {
+  margin-right: auto;
+}

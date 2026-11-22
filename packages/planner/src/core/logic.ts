@@ -559,6 +559,66 @@ export function removeProject(data: PlannerData, project: Project, now = new Dat
   }
 }
 
+// ─── 回数の目標（リーディング 30/100 回 など） ──────────────────────
+
+/** 回数を数える項目（その項目か、下ろしてきた元のうち回数の目標のもの）。無ければ undefined */
+export function countedTask(data: PlannerData, task: Task): Task | undefined {
+  const byId = new Map(data.tasks.map((t) => [t.id, t]))
+  for (let t: Task | undefined = task; t; t = t.parentId ? byId.get(t.parentId) : undefined) {
+    if (t.count) return t
+  }
+  return undefined
+}
+
+/** 回数の目標にできる項目か（下ろした先のコピーや、習慣から下ろしたものは、元で数える） */
+export function countable(task: Task): boolean {
+  return !task.parentId && !task.habitId
+}
+
+/** 回数が変わった項目の、終えた・終えていないを、回数（めざす数に届いたか）に合わせる */
+function followCount(data: PlannerData, next: Task, now: Date): Changes {
+  const reached = !!next.count && next.count.done >= next.count.target
+  if (reached === !!next.doneAt) return { tasks: [next] }
+  // 終える・取り消すのは toggleDone に任せる（下ろした先・元も一緒に）
+  const updated: PlannerData = { ...data, tasks: data.tasks.map((t) => (t.id === next.id ? next : t)) }
+  return toggleDone(updated, next, now)
+}
+
+/**
+ * 回数の目標にする・めざす数や今の数を直す（input を渡さなければ、ふつうの項目に戻す。日ごとの記録も消える）。
+ * 今の数がめざす数に届いていれば終えたことに、届いていなければ終えていないことにする
+ */
+export function setCount(data: PlannerData, task: Task, input: { target: number; done: number } | undefined, now: Date): Changes {
+  const t = iso(now)
+  if (!input) {
+    if (!task.count) return {}
+    const { count: _c, ...rest } = task
+    return { tasks: [{ ...rest, updatedAt: t }] }
+  }
+  const target = Math.max(1, Math.round(input.target) || 1)
+  const done = Math.max(0, Math.round(input.done) || 0)
+  const log = task.count?.log
+  return followCount(data, { ...task, count: { target, done, ...(log && Object.keys(log).length ? { log } : {}) }, updatedAt: t }, now)
+}
+
+/**
+ * 回数を足す（delta は 1・-1 など）。足した数は、その日の記録にも残す。
+ * めざす数に届いたら終える。終えた項目には足さない（チェックを外してから）
+ */
+export function addCount(data: PlannerData, task: Task, delta: number, now: Date): Changes {
+  if (!task.count || task.doneAt) return {}
+  const done = Math.max(0, task.count.done + delta)
+  const added = done - task.count.done
+  if (added === 0) return {}
+  const day = dayKey(now)
+  const log = { ...(task.count.log ?? {}) }
+  const sum = (log[day] ?? 0) + added
+  if (sum) log[day] = sum
+  else delete log[day]
+  const count = { target: task.count.target, done, ...(Object.keys(log).length ? { log } : {}) }
+  return followCount(data, { ...task, count, updatedAt: iso(now) }, now)
+}
+
 // ─── 目標を細かく分ける（中身のプロジェクト） ─────────────────────
 
 /** その目標の「中身」のプロジェクトと、その進み具合（中身の期日目標のうち、終えた数／全部） */

@@ -50,6 +50,19 @@ function App() {
 - プロジェクトの終えた期日目標は、一番下の **「終えた目標（n）」** にたたみます（はじめは閉じている。新しく終えた順。開けば見られ、チェックを外せば上へ戻る）。細かいステップを足していっても、カードが終えたもので埋まりません
 - 時間軸は、スマホの幅では列を横にすべらせ、上の帯から列を選べます。プロジェクトは、画面の幅に合わせて段組みになり、カードをドラッグで並べ替えられます（キーボードでも）
 
+### 回数の目標（30/100 回 ＋1）
+
+「リーディング 10 回・20 回・30 回…」のように回数で刻むステップは、1 つの「回数の目標」にまとめられます。
+
+| 操作 | どうなるか |
+|---|---|
+| やること・期日目標の … →「回数の目標にする…」 | めざす回数と今の回数を決める。行の名前の下に「20/100 回 ＋1」（うしろの色の帯が進み具合） |
+| ＋1 | 1 回足す。足した日の記録が残る（振り返りで、その日に足した回数を出せる。`countsOn`） |
+| … →「1 回へらす」「回数を変える…」 | 押しまちがいを直す・めざす数を変える。「回数を変える…」の小窓から、回数の目標をやめることもできる |
+| めざす回数に届く | 終えたことになる（下ろした先・元も一緒に）。チェックを外せば、回数はそのままで、また足せる |
+
+時間軸で下ろした先（今日の列など）では、元の回数を出し、足すのも元に足します。
+
 ### 目標を細かく分ける（中身のプロジェクト）
 
 大きな目標（「ALL IN ONE 完了」）の細かいステップは、別のプロジェクト（「ALL IN ONE 完遂」）に並べ、目標とつなげます。メインの目標は 1 行のまま、細かいステップは中身のほうに分かれます。
@@ -107,7 +120,7 @@ const data: PlannerData = { tasks: [], habits: [], projects: [] }
 
 | 形 | 中身 |
 |---|---|
-| `Task` | やること。`horizon`（列）・`priority`（A〜D・P）・`due`（期日 YYYY-MM-DD）・`projectId` など |
+| `Task` | やること。`horizon`（列）・`priority`（A〜D・P）・`due`（期日 YYYY-MM-DD）・`projectId` など。回数の目標は `count`（`target` めざす数・`done` 今の数・`log` 日ごとに足した数） |
 | `Habit` | 習慣（くり返し）。`period`（毎日・毎週・毎月・毎年）と「その日」（`weekday`・`day`・`yearDay`）。終えたら `endedAt`・`endedAs`（`'graduated'` 卒業／`'paused'` お休み）・`endNote`（ひとこと）。また始めたら、休んでいた間を `breaks` に残す |
 | `Project` | プロジェクト・テーマ。テーマの中にプロジェクトを入れられる（1 段だけ）。`goalId` は、そのプロジェクトが「中身」になっている期日目標 |
 
@@ -149,6 +162,7 @@ data = applyChanges(data, toggleDone(data, data.tasks[0], now))
 | 習慣を終える | `endHabit(data, habit, 'graduated' \| 'paused', ひとこと, now)` 卒業・お休み（終えた習慣なら、終え方とひとことだけ変える）／`resumeHabit(data, habit, now)` また始める／`endedHabits(habits)` 終えた習慣を新しい順に。`buildColumns` の列は、終えた習慣を `habits` に入れず `ended` に入れる |
 | くり返しの「その日」 | 毎月: `withDay(habit, 20 \| 'end' \| 'w2-3' \| 'wL-5')`／毎週・毎年: `withWhen(habit, 3 \| '12-06' \| '12')`／`whenLabel` `whenDate` `monthDayDate` |
 | プロジェクト | `newProject` `topProjects` `childProjects` `moveProject` `removeProject` `reorderProjects` `projectGoals`（終えていないもの・終えたもの＝新しく終えた順）`reorderGoals` |
+| 回数の目標 | `setCount(data, task, { target, done } \| undefined, now)` 回数の目標にする・直す・やめる／`addCount(data, task, 1, now)` 足す（-1 でへらす）／`countedTask(data, task)` 数える項目（下ろした先なら元）／`countsOn(data, day)` その日に足した回数 |
 | 目標を細かく分ける | `splitGoal(data, goal, name, now)` 中身のプロジェクトを作る／`linkGoal(data, goal, project, now)` 今あるものをつなぐ／`unlinkGoal(project, now)`／`goalBreakdown(data, goal)` 中身と進み具合／`breakdownOf(data, project)` どの目標の中身か／`linkableProjects(data, goal)` つなげるもの |
 | 振り返り | `doneOn(data, day, now)` その日に済ませたこと／`streak(habit, now)` 続いた日数／`toggleHabitOnDay` `finishOnDay`（過ぎた日に付け直す）／`habitActiveOn(habit, day)` その日に続けていたか（始める前・終えたあと・休んでいた間は数えない。「毎日 3/4」の分母に使う）／`habitRecord(habit, now)` 始めてから終えるまでの、できた数と期間の数 |
 | 日付 | `dayKey` `weekKey` `weekStart` `addDays` `periodLabel` `dueLabel` `shortDueLabel` |
@@ -158,7 +172,7 @@ data = applyChanges(data, toggleDone(data, data.tasks[0], now))
 
 ## English
 
-Building blocks for a timeline (today / this week / months / this year / life) and projects, taken from the Magic Lamp app. Screens: `<Timeline data now onChange />` (`@shiodome47/planner/timeline`) and `<Projects data now onChange />` (`@shiodome47/planner/projects`); import `@shiodome47/planner/style.css`. Styles apply only inside `.planner`; override `--pl-*` variables to match your app. `@shiodome47/planner/core` holds the data model (`Task`, `Habit`, `Project`, `PlannerData`) and the rules — which column a dated task belongs to, the next date of a recurring habit ("2nd Sunday of each month", "every December 6"), placing, finishing and reordering, and review helpers. A goal can be broken down into its own project (`splitGoal` / `linkGoal`, stored as `Project.goalId`); the goal row shows the inner project's progress. Habits can be ended as "graduated" or "paused" (`endHabit` / `resumeHabit`); their check history is kept, they move to a collapsed "past habits" list, and `habitActiveOn` / `habitRecord` count only the days a habit was active. Functions never mutate data; they return `Changes`, which you save wherever you like and apply locally with `applyChanges`. Pass the current time (`now`) explicitly. UI labels are Japanese.
+Building blocks for a timeline (today / this week / months / this year / life) and projects, taken from the Magic Lamp app. Screens: `<Timeline data now onChange />` (`@shiodome47/planner/timeline`) and `<Projects data now onChange />` (`@shiodome47/planner/projects`); import `@shiodome47/planner/style.css`. Styles apply only inside `.planner`; override `--pl-*` variables to match your app. `@shiodome47/planner/core` holds the data model (`Task`, `Habit`, `Project`, `PlannerData`) and the rules — which column a dated task belongs to, the next date of a recurring habit ("2nd Sunday of each month", "every December 6"), placing, finishing and reordering, and review helpers. Tasks can be counted goals (`count`: target / done / per-day log; `setCount` / `addCount`), shown as "20/100 回 ＋1". A goal can be broken down into its own project (`splitGoal` / `linkGoal`, stored as `Project.goalId`); the goal row shows the inner project's progress. Habits can be ended as "graduated" or "paused" (`endHabit` / `resumeHabit`); their check history is kept, they move to a collapsed "past habits" list, and `habitActiveOn` / `habitRecord` count only the days a habit was active. Functions never mutate data; they return `Changes`, which you save wherever you like and apply locally with `applyChanges`. Pass the current time (`now`) explicitly. UI labels are Japanese.
 
 ## License
 

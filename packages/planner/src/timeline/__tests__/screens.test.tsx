@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { applyChanges, newHabit, newProject, newTask, toggleHabit, type Changes, type PlannerData } from '../../core'
+import { applyChanges, newHabit, newProject, newTask, placeDown, setCount, toggleHabit, type Changes, type PlannerData } from '../../core'
 import { Timeline } from '../index'
 import { Projects } from '../../projects'
 
@@ -228,5 +228,65 @@ describe('目標を細かく分ける（中身のプロジェクト）', () => {
     pick('ALL IN ONE 完了', '中身とのつなぎを外す')
     expect(onChange.mock.calls[0][0].projects![0]).toMatchObject({ name: 'ALL IN ONE 完遂' })
     expect(onChange.mock.calls[0][0].projects![0].goalId).toBeUndefined()
+  })
+})
+
+describe('回数の目標（30/100 回 ＋1）', () => {
+  beforeAll(() => {
+    const proto = HTMLDialogElement.prototype
+    if (!proto.showModal) proto.showModal = function (this: HTMLDialogElement) { this.setAttribute('open', '') }
+    if (!proto.close) proto.close = function (this: HTMLDialogElement) { this.removeAttribute('open') }
+  })
+
+  /** 今週の列に「リーディング」。target を渡すと回数の目標に */
+  function reading(target?: number, done = 0): PlannerData {
+    let d: PlannerData = { tasks: [], habits: [], projects: [] }
+    d = applyChanges(d, { tasks: [newTask(d, { title: 'リーディング', horizon: 'week', priority: 'B' }, NOW)] })
+    if (target) d = applyChanges(d, setCount(d, d.tasks[0], { target, done }, NOW))
+    return d
+  }
+
+  it('… →「回数の目標にする…」で、めざす回数と今の回数を決める', () => {
+    const onChange = vi.fn<(c: Changes) => void>()
+    render(<Timeline data={reading()} now={NOW} onChange={onChange} />)
+    fireEvent.click(screen.getByRole('button', { name: '「リーディング」の操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '回数の目標にする…' }))
+    const [target, done] = screen.getAllByRole('spinbutton')
+    fireEvent.change(target, { target: { value: '100' } })
+    fireEvent.change(done, { target: { value: '20' } })
+    fireEvent.click(screen.getByRole('button', { name: '決める' }))
+    expect(onChange.mock.calls[0][0].tasks![0].count).toEqual({ target: 100, done: 20 })
+  })
+
+  it('行に「20/100 回」と ＋1。押すと 1 回足す', () => {
+    const onChange = vi.fn<(c: Changes) => void>()
+    render(<Timeline data={reading(100, 20)} now={NOW} onChange={onChange} />)
+    expect(screen.getByText('20/100 回')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '「リーディング」を 1 回足す（今 20/100 回）' }))
+    expect(onChange.mock.calls[0][0].tasks![0].count?.done).toBe(21)
+  })
+
+  it('下ろした先（今日の列）でも、元の回数を出して足せる', () => {
+    const onChange = vi.fn<(c: Changes) => void>()
+    let d = reading(100, 20)
+    d = applyChanges(d, placeDown(d, d.tasks[0], 'today', NOW))
+    render(<Timeline data={d} now={NOW} onChange={onChange} />)
+    const plus = screen.getAllByRole('button', { name: '「リーディング」を 1 回足す（今 20/100 回）' })
+    expect(plus.length).toBeGreaterThan(0)
+    fireEvent.click(plus[plus.length - 1])
+    const changed = onChange.mock.calls[0][0].tasks!
+    expect(changed.find((t) => t.id === d.tasks[0].id)?.count?.done).toBe(21)
+  })
+
+  it('プロジェクトの期日目標にも、名前の下に回数と ＋1', () => {
+    let d = sample()
+    const p = d.projects[0]
+    d = applyChanges(d, { tasks: [newTask(d, { title: '151-200 リーディング', horizon: 'pool', priority: 'C', projectId: p.id }, NOW)] })
+    const goal = d.tasks.find((t) => t.title === '151-200 リーディング')!
+    d = applyChanges(d, setCount(d, goal, { target: 100, done: 30 }, NOW))
+    render(<Projects data={d} now={NOW} onChange={() => {}} />)
+    const card = screen.getByRole('region', { name: '自治会' })
+    expect(within(card).getByText('30/100 回')).toBeTruthy()
+    expect(within(card).getByRole('button', { name: '「151-200 リーディング」を 1 回足す（今 30/100 回）' })).toBeTruthy()
   })
 })
