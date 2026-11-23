@@ -1,4 +1,4 @@
-import { closestCenter, DndContext, KeyboardSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { closestCenter, DndContext, KeyboardSensor, useSensor, useSensors, type DragEndEvent, type DraggableSyntheticListeners } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, useSortable, type SortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useDragSensors } from 'linkshelf'
@@ -60,8 +60,36 @@ export function useSortableRow(id: string, disabled: boolean | { draggable: bool
     isDragging,
     // 行そのものをつかめるように（li の役割は list item のままにする）。
     // 並べ替えを止めているときも、行の中のチェックなどは押せるので aria-disabled は付けない
-    handleProps: { ...attributes, ...listeners, role: undefined, 'aria-disabled': undefined },
+    handleProps: { ...attributes, ...rowListeners(listeners), role: undefined, 'aria-disabled': undefined },
   }
+}
+
+/** 入力欄（名前の書き換え・くり返しの選択など）の中か */
+function inField(target: EventTarget | null): boolean {
+  return target instanceof Element && !!target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]')
+}
+
+/**
+ * 行に付けるドラッグの合図を、次のときだけ通す。
+ * - キーボード（スペース・Enter で持ち上げる）は、行そのものにフォーカスがあるときだけ。
+ *   行の中のボタン（チェック・…）や、名前を書き換える欄、… のメニュー（行の外に出すが、React では行の中）で
+ *   スペース・Enter を押したときに、行を持ち上げてしまわないように（持ち上げたままになると、マウスでも動かせなくなる）
+ * - マウス・指は、入力欄の中から始めたときは通さない（文字を選ぶ・カーソルを動かすため）
+ */
+function rowListeners(listeners: DraggableSyntheticListeners): Record<string, (e: { target: EventTarget | null; currentTarget: EventTarget | null }) => void> {
+  if (!listeners) return {}
+  return Object.fromEntries(
+    Object.entries(listeners).map(([name, fn]) => [
+      name,
+      name === 'onKeyDown'
+        ? (e: { target: EventTarget | null; currentTarget: EventTarget | null }) => {
+            if (e.target === e.currentTarget) fn(e)
+          }
+        : (e: { target: EventTarget | null; currentTarget: EventTarget | null }) => {
+            if (!inField(e.target)) fn(e)
+          },
+    ]),
+  )
 }
 
 /**

@@ -1,5 +1,5 @@
 import { addDays, dayKey, daysUntil, HORIZON_HABIT_PERIOD, HORIZON_PERIOD, inSamePeriod, monthDayDate, periodHorizon, periodKey, weekStart } from './period'
-import { autoDue, whenDate } from './when'
+import { autoDue, habitDoneInPeriod, whenDate } from './when'
 import { HORIZONS, PRIORITIES, type BoardHorizon, type Habit, type HabitBreak, type HabitEnd, type Horizon, type MonthDay, type Period, type PlannerData, type Priority, type Project, type Task } from './types'
 
 /**
@@ -20,6 +20,28 @@ import { HORIZONS, PRIORITIES, type BoardHorizon, type Habit, type HabitBreak, t
 export type PlaceTarget = BoardHorizon | 'tomorrow' | 'nextweek'
 
 const RANK: Record<BoardHorizon, number> = { today: 0, week: 1, month: 2, year: 3, life: 4 }
+
+/** 元（下ろしてきた元、さらにその元。近い順）。データが壊れて輪になっていても止まる */
+function ancestorsOf(task: Task, byId: Map<string, Task>): Task[] {
+  const out: Task[] = []
+  const seen = new Set([task.id])
+  for (let p = task.parentId ? byId.get(task.parentId) : undefined; p && !seen.has(p.id); p = p.parentId ? byId.get(p.parentId) : undefined) {
+    seen.add(p.id)
+    out.push(p)
+  }
+  return out
+}
+
+/** どの習慣から下ろしたものか（下ろした先から、さらに下ろしたものでも、元をたどって見つける） */
+function habitIdOf(task: Task, byId: Map<string, Task>): string | undefined {
+  return task.habitId ?? ancestorsOf(task, byId).find((p) => p.habitId)?.habitId
+}
+
+/** YYYY-MM-DD の、その日の正午（端末の時刻） */
+function noonOf(key: string): Date {
+  const [y, m, d] = key.split('-').map(Number)
+  return new Date(y, m - 1, d, 12)
+}
 
 /** 下ろした先が、どの期間のためのものかを表す値 */
 export function placedForKey(target: PlaceTarget, now: Date): string | undefined {
@@ -143,12 +165,13 @@ export function todayMarks(data: PlannerData, now: Date): TodayMarks {
   for (const v of today.habits) habits.set(v.habit.id, v.checked)
   for (const v of today.tasks) {
     if (v.faded) continue
-    if (v.task.habitId) {
-      habits.set(v.task.habitId, v.done || !!habits.get(v.task.habitId))
+    const habitId = habitIdOf(v.task, byId)
+    if (habitId) {
+      habits.set(habitId, v.done || !!habits.get(habitId))
       continue
     }
-    let root = v.task
-    while (root.parentId && byId.get(root.parentId)) root = byId.get(root.parentId)!
+    const chain = ancestorsOf(v.task, byId)
+    const root = chain.length ? chain[chain.length - 1] : v.task
     tasks.set(root.id, v.done || !!root.doneAt)
   }
   return { habits, tasks }
@@ -287,7 +310,8 @@ export function buildColumns(data: PlannerData, now: Date): ColumnView[] {
     const nextWeek = h === 'week' ? visible.filter((t) => isForNextWeek(t, now)) : []
     const habitPeriod = HORIZON_HABIT_PERIOD[h]
     const habitView = (habit: Habit, auto: boolean, dueDay?: Date): HabitView => {
-      const checked = inSamePeriod(habit.period, habit.checkedAt, now)
+      // 「その日」で出している前の期間（先月など）の分は、その期間のチェックで見る
+      const checked = auto && dueDay ? habitDoneInPeriod(habit, dueDay) : inSamePeriod(habit.period, habit.checkedAt, now)
       const child = activeHabitChild(habit, data.tasks, now)
       return {
         habit,
@@ -306,7 +330,11 @@ export function buildColumns(data: PlannerData, now: Date): ColumnView[] {
     const autos: HabitView[] = []
     for (const habit of live.filter((x) => x.period !== habitPeriod).sort(byOrder)) {
       const due = autoDue(habit, h, now)
-      if (due) autos.push(habitView(habit, true, due))
+      if (!due) continue
+      // この列に下ろしたもの（やること）があれば、そちらだけを出す（同じものを 2 行出さない）
+      const copy = activeHabitChild(habit, data.tasks, now)
+      if (copy && copy.horizon === h) continue
+      autos.push(habitView(habit, true, due))
     }
     const habits = [...own, ...autos]
     return {
@@ -338,9 +366,9 @@ export interface Changes {
 
 const iso = (now: Date) => now.toISOString()
 
-/** 同じ列・同じ優先度の末尾の順番 */
-function nextOrder(tasks: Task[], horizon: Horizon, priority: Priority): number {
-  const same = tasks.filter((t) => t.horizon === horizon && t.priority === priority)
+/** 同じ列・同じ優先度の末尾の順番（列は、日付から決まる目標なども含めて、いま出ている列で数える） */
+function nextOrder(tasks: Task[], horizon: Horizon, priority: Priority, now: Date): number {
+  const same = tasks.filter((t) => t.priority === priority && effectiveHorizon(t, now) === horizon)
   return same.length === 0 ? 0 : Math.max(...same.map((t) => t.order)) + 1
 }
 
@@ -350,12 +378,14 @@ export function newTask(
   now: Date,
 ): Task {
   const t = iso(now)
+  // 日付のあるもの・プロジェクトの目標は、出る列が日付などから決まるので、その列の末尾に
+  const column = effectiveHorizon({ horizon: input.horizon, projectId: input.projectId, due: input.due } as Task, now)
   return {
     id: crypto.randomUUID(),
     title: input.title,
     horizon: input.horizon,
     priority: input.priority,
-    order: nextOrder(data.tasks, input.horizon, input.priority),
+    order: nextOrder(data.tasks, column, input.priority, now),
     ...(input.tomorrow ? { placedFor: placedForKey('tomorrow', now) } : {}),
     ...(input.nextWeek ? { placedFor: placedForKey('nextweek', now) } : {}),
     ...(input.projectId ? { projectId: input.projectId } : {}),
@@ -380,8 +410,10 @@ export function placeDown(data: PlannerData, task: Task, target: PlaceTarget, no
     title: task.title,
     horizon,
     priority: task.priority,
-    order: nextOrder(data.tasks, horizon, task.priority),
+    order: nextOrder(data.tasks, horizon, task.priority, now),
     parentId: task.id,
+    // 習慣から下ろしたものを、さらに下ろしたときも、どの習慣のものかを持たせる（終えたら習慣にチェックが付くように）
+    ...(task.habitId ? { habitId: task.habitId } : {}),
     ...(placedForKey(target, now) ? { placedFor: placedForKey(target, now) } : {}),
     ...(task.projectId ? { projectId: task.projectId } : {}),
     ...(task.due ? { due: task.due } : {}),
@@ -397,18 +429,23 @@ export function returnUp(data: PlannerData, task: Task, now: Date): Changes {
   return { deleteTaskIds: [task.id, ...descendantsOf(data.tasks, task.id, now)] }
 }
 
-/** 列を移す（プロジェクトの置き場から列に置く、など）。下ろした先の項目は、そのまま */
+/**
+ * 列を移す。下ろした先の項目は、そのまま。
+ * 日付のあるもの・プロジェクトの目標は、出る列が日付から決まるので動かさない（列に出すときは placeDown で下ろす）
+ */
 export function moveTo(data: PlannerData, task: Task, horizon: Horizon, now: Date): Changes {
-  if (task.horizon === horizon) return {}
+  if (task.horizon === horizon || followsDue(task) || isProjectGoal(task)) return {}
   const { placedFor: _p, ...rest } = task
-  return { tasks: [{ ...rest, horizon, order: nextOrder(data.tasks, horizon, task.priority), updatedAt: iso(now) }] }
+  return { tasks: [{ ...rest, horizon, order: nextOrder(data.tasks, horizon, task.priority, now), updatedAt: iso(now) }] }
 }
 
-/** 生きている子孫（下ろした先、さらにその先） */
-function descendantsOf(tasks: Task[], id: string, now: Date): string[] {
+/** 生きている子孫（下ろした先、さらにその先）。データが壊れて輪になっていても止まる */
+function descendantsOf(tasks: Task[], id: string, now: Date, seen = new Set<string>([id])): string[] {
   const out: string[] = []
   for (const t of tasks) {
-    if (t.parentId === id && !isExpired(t, now)) out.push(t.id, ...descendantsOf(tasks, t.id, now))
+    if (t.parentId !== id || seen.has(t.id) || isExpired(t, now)) continue
+    seen.add(t.id)
+    out.push(t.id, ...descendantsOf(tasks, t.id, now, seen))
   }
   return out
 }
@@ -418,32 +455,44 @@ function descendantsOf(tasks: Task[], id: string, now: Date): string[] {
  * 下ろした先で終えたら、元（さらにその元）も終える。元で終えたら、生きている下ろした先も終える。
  */
 export function toggleDone(data: PlannerData, task: Task, now: Date): Changes {
-  const byId = new Map(data.tasks.map((t) => [t.id, t]))
-  const ids = new Set<string>([task.id, ...descendantsOf(data.tasks, task.id, now)])
-  for (let p = task.parentId ? byId.get(task.parentId) : undefined; p; p = p.parentId ? byId.get(p.parentId) : undefined) {
-    ids.add(p.id)
-  }
-  const t = iso(now)
   const finishing = !task.doneAt
-  const tasks = [...ids]
+  const tasks = doneTasks(data, task, finishing, now)
+  // 習慣から下ろしたもの（さらに下ろしたものも）なら、習慣の今の期間のチェックも合わせる。
+  // 取り消すときは、今の期間に終えたものだけ（前の期間に終えたものを取り消しても、今の期間のチェックは外さない）
+  const habitId = habitIdOf(task, new Map(data.tasks.map((t) => [t.id, t])))
+  const habit = habitId ? data.habits.find((x) => x.id === habitId) : undefined
+  if (!habit || (!finishing && !inSamePeriod(habit.period, task.doneAt, now))) return { tasks }
+  if (inSamePeriod(habit.period, habit.checkedAt, now) !== finishing) return { tasks, habits: [toggleHabit(habit, now)] }
+  return { tasks }
+}
+
+/** 終える・取り消す項目（その項目と、生きている下ろした先、元）。習慣のチェックは合わせない */
+function doneTasks(data: PlannerData, task: Task, finishing: boolean, now: Date): Task[] {
+  const byId = new Map(data.tasks.map((t) => [t.id, t]))
+  byId.set(task.id, task)
+  const ids = new Set<string>([task.id, ...descendantsOf(data.tasks, task.id, now), ...ancestorsOf(task, byId).map((p) => p.id)])
+  const t = iso(now)
+  return [...ids]
     .map((id) => byId.get(id))
     .filter((x): x is Task => !!x)
     .map((x) => {
       const { doneAt: _d, ...rest } = x
       return finishing ? { ...rest, doneAt: x.doneAt ?? t, updatedAt: t } : { ...rest, updatedAt: t }
     })
-  // 習慣から下ろしたものなら、習慣の今の期間のチェックも合わせる
-  const habit = task.habitId ? data.habits.find((x) => x.id === task.habitId) : undefined
-  if (habit && inSamePeriod(habit.period, habit.checkedAt, now) !== finishing) {
-    return { tasks, habits: [toggleHabit(habit, now)] }
-  }
-  return { tasks }
 }
 
 /** 同じ列・同じ優先度の中で、1 つ上・下と入れ替える */
 export function moveStep(data: PlannerData, task: Task, step: -1 | 1, now: Date): Changes {
+  const column = effectiveHorizon(task, now)
   const same = data.tasks
-    .filter((t) => t.horizon === task.horizon && t.priority === task.priority && isVisible(t, now) && isForTomorrow(t, now) === isForTomorrow(task, now))
+    .filter(
+      (t) =>
+        t.priority === task.priority &&
+        effectiveHorizon(t, now) === column &&
+        isVisible(t, now) &&
+        isForTomorrow(t, now) === isForTomorrow(task, now) &&
+        isForNextWeek(t, now) === isForNextWeek(task, now),
+    )
     .sort(byOrder)
   const i = same.findIndex((t) => t.id === task.id)
   const j = i + step
@@ -461,7 +510,7 @@ export function moveStep(data: PlannerData, task: Task, step: -1 | 1, now: Date)
 /** 優先度を変える（新しい優先度の末尾へ） */
 export function setPriority(data: PlannerData, task: Task, priority: Priority, now: Date): Changes {
   if (task.priority === priority) return {}
-  return { tasks: [{ ...task, priority, order: nextOrder(data.tasks, task.horizon, priority), updatedAt: iso(now) }] }
+  return { tasks: [{ ...task, priority, order: nextOrder(data.tasks, effectiveHorizon(task, now), priority, now), updatedAt: iso(now) }] }
 }
 
 /** 消す（下ろした先も一緒に消す） */
@@ -501,13 +550,19 @@ export function toggleHabit(habit: Habit, now: Date): Habit {
   const t = iso(now)
   const history = habit.history ?? []
   if (inSamePeriod(habit.period, habit.checkedAt, now)) {
-    // 外す: チェックした日の記録も消す
-    const day = dayKey(new Date(habit.checkedAt!))
-    return { ...rest, history: history.filter((d) => d !== day), updatedAt: t }
+    // 外す: 今の期間の記録も消す（振り返りから付け直した日も。時間軸と振り返りが食い違わないように）
+    const key = periodKey(habit.period, now)
+    return { ...rest, history: history.filter((d) => periodKey(habit.period, noonOf(d)) !== key), updatedAt: t }
   }
-  const today = dayKey(now)
-  const next = history.includes(today) ? history : [...history, today].sort().slice(-HABIT_HISTORY_LIMIT)
-  return { ...rest, checkedAt: t, history: next, updatedAt: t }
+  return { ...rest, checkedAt: t, ...withHistoryDay(habit, dayKey(now)), updatedAt: t }
+}
+
+/** 記録に日を足す（上限を超えたら古い日から消し、残っている一番古い日を historyFrom に覚える） */
+function withHistoryDay(habit: Habit, key: string): Pick<Habit, 'history' | 'historyFrom'> {
+  const all = [...new Set([...(habit.history ?? []), key])].sort()
+  if (all.length <= HABIT_HISTORY_LIMIT) return { history: all, ...(habit.historyFrom ? { historyFrom: habit.historyFrom } : {}) }
+  const kept = all.slice(-HABIT_HISTORY_LIMIT)
+  return { history: kept, historyFrom: habit.historyFrom && habit.historyFrom > kept[0] ? habit.historyFrom : kept[0] }
 }
 
 /** 習慣の記録を残す日数の上限 */
@@ -530,8 +585,22 @@ export function endHabit(data: PlannerData, habit: Habit, as: HabitEnd, endNote:
   const { endNote: _n, ...rest } = habit
   const note = endNote.trim()
   const next: Habit = { ...rest, endedAt: habit.endedAt ?? t, endedAs: as, ...(note ? { endNote: note } : {}), updatedAt: t }
-  const open = habit.endedAt ? [] : data.tasks.filter((x) => x.habitId === habit.id && !x.doneAt && !isExpired(x, now))
-  return { habits: [next], ...(open.length ? { deleteTaskIds: open.map((x) => x.id) } : {}) }
+  const open = habit.endedAt ? [] : openHabitCopies(data, habit, now)
+  return { habits: [next], ...(open.length ? { deleteTaskIds: open } : {}) }
+}
+
+/**
+ * 習慣を完全に消す（記録も）。下ろした先で、まだ終えていないやることも消す（終えたものは、振り返りに残すので消さない）
+ */
+export function removeHabit(data: PlannerData, habit: Habit, now: Date): Changes {
+  const open = openHabitCopies(data, habit, now)
+  return { deleteHabitIds: [habit.id], ...(open.length ? { deleteTaskIds: open } : {}) }
+}
+
+/** その習慣から下ろして（さらに下ろしたものも）、まだ終えていない、生きているやること */
+function openHabitCopies(data: PlannerData, habit: Habit, now: Date): string[] {
+  const byId = new Map(data.tasks.map((t) => [t.id, t]))
+  return data.tasks.filter((x) => !x.doneAt && !isExpired(x, now) && habitIdOf(x, byId) === habit.id).map((x) => x.id)
 }
 
 /**
@@ -596,17 +665,17 @@ export function removeProject(data: PlannerData, project: Project, now = new Dat
 
 /** 回数を数える項目（その項目か、下ろしてきた元のうち回数の目標のもの）。無ければ undefined */
 export function countedTask(data: PlannerData, task: Task): Task | undefined {
-  const byId = new Map(data.tasks.map((t) => [t.id, t]))
-  for (let t: Task | undefined = task; t; t = t.parentId ? byId.get(t.parentId) : undefined) {
-    if (t.count) return t
-  }
-  return undefined
+  if (task.count) return task
+  return ancestorsOf(task, new Map(data.tasks.map((t) => [t.id, t]))).find((t) => t.count)
 }
 
 /** 回数の目標にできる項目か（下ろした先のコピーや、習慣から下ろしたものは、元で数える） */
 export function countable(task: Task): boolean {
   return !task.parentId && !task.habitId
 }
+
+/** めざす回数・今の回数の上限 */
+const COUNT_LIMIT = 1_000_000
 
 /** 回数が変わった項目の、終えた・終えていないを、回数（めざす数に届いたか）に合わせる */
 function followCount(data: PlannerData, next: Task, now: Date): Changes {
@@ -628,8 +697,9 @@ export function setCount(data: PlannerData, task: Task, input: { target: number;
     const { count: _c, ...rest } = task
     return { tasks: [{ ...rest, updatedAt: t }] }
   }
-  const target = Math.max(1, Math.round(input.target) || 1)
-  const done = Math.max(0, Math.round(input.done) || 0)
+  if (!Number.isFinite(input.target) || !Number.isFinite(input.done)) return {}
+  const target = Math.min(COUNT_LIMIT, Math.max(1, Math.round(input.target)))
+  const done = Math.min(COUNT_LIMIT, Math.max(0, Math.round(input.done)))
   const log = task.count?.log
   return followCount(data, { ...task, count: { target, done, ...(log && Object.keys(log).length ? { log } : {}) }, updatedAt: t }, now)
 }
@@ -640,7 +710,8 @@ export function setCount(data: PlannerData, task: Task, input: { target: number;
  */
 export function addCount(data: PlannerData, task: Task, delta: number, now: Date): Changes {
   if (!task.count || task.doneAt) return {}
-  const done = Math.max(0, task.count.done + delta)
+  if (!Number.isFinite(delta)) return {}
+  const done = Math.min(COUNT_LIMIT, Math.max(0, task.count.done + Math.round(delta)))
   const added = done - task.count.done
   if (added === 0) return {}
   const day = dayKey(now)
@@ -649,7 +720,10 @@ export function addCount(data: PlannerData, task: Task, delta: number, now: Date
   if (sum) log[day] = sum
   else delete log[day]
   const count = { target: task.count.target, done, ...(Object.keys(log).length ? { log } : {}) }
-  return followCount(data, { ...task, count, updatedAt: iso(now) }, now)
+  const next = { ...task, count, updatedAt: iso(now) }
+  // へらすときは、終えた・終えていないを変えない（チェックを外したあとに 1 回へらして、また終わってしまわないように）
+  if (delta < 0) return { tasks: [next] }
+  return followCount(data, next, now)
 }
 
 // ─── 目標を細かく分ける（中身のプロジェクト） ─────────────────────
@@ -719,6 +793,8 @@ export function unlinkGoal(project: Project, now: Date): Changes {
 export function moveProject(data: PlannerData, project: Project, parentId: string | undefined, now: Date): Changes {
   if (parentId === project.parentId || parentId === project.id) return {}
   if (parentId && childProjects(data, project.id).length > 0) return {}
+  // 入れる先は、いちばん上のプロジェクト・テーマだけ（入れ子は 1 段だけ）
+  if (parentId && !data.projects.some((p) => p.id === parentId && !p.parentId)) return {}
   const siblings = data.projects.filter((p) => p.parentId === parentId && p.id !== project.id)
   const { parentId: _p, ...rest } = project
   return {
@@ -848,7 +924,10 @@ export function reorderProjects(data: PlannerData, activeId: string, overId: str
 
 /** その習慣から下ろして、今も生きている項目（無ければ undefined） */
 export function activeHabitChild(habit: Habit, tasks: Task[], now: Date): Task | undefined {
-  return tasks.find((t) => t.habitId === habit.id && !isExpired(t, now))
+  // 習慣から直接下ろしたもの（さらに下ろした先は除く）で、前の期間に終えたものは除く（週・月が変わったら、もう今の分ではない）
+  return tasks.find(
+    (t) => t.habitId === habit.id && !t.parentId && !isExpired(t, now) && (!t.doneAt || inSamePeriod(habit.period, t.doneAt, now)),
+  )
 }
 
 /** 習慣の下ろせる先（習慣の列より短い期間の列と、明日） */
@@ -869,7 +948,7 @@ export function placeHabitDown(data: PlannerData, habit: Habit, target: PlaceTar
     title: habit.title,
     horizon,
     priority: 'C',
-    order: nextOrder(data.tasks, horizon, 'C'),
+    order: nextOrder(data.tasks, horizon, 'C', now),
     habitId: habit.id,
     ...(placedForKey(target, now) ? { placedFor: placedForKey(target, now) } : {}),
     ...(habit.projectId ? { projectId: habit.projectId } : {}),
@@ -877,7 +956,7 @@ export function placeHabitDown(data: PlannerData, habit: Habit, target: PlaceTar
     createdAt: t,
     updatedAt: t,
   }
-  return { tasks: [child], deleteTaskIds: existing && !existing.doneAt ? [existing.id] : [] }
+  return { tasks: [child], deleteTaskIds: existing && !existing.doneAt ? [existing.id, ...descendantsOf(data.tasks, existing.id, now)] : [] }
 }
 
 /** 習慣のチェックを付ける・外す。下ろした先があれば、その「終えた」も合わせる */
@@ -886,15 +965,53 @@ export function toggleHabitAll(data: PlannerData, habit: Habit, now: Date): Chan
   const checking = inSamePeriod(next.period, next.checkedAt, now)
   const child = activeHabitChild(habit, data.tasks, now)
   if (!child || !!child.doneAt === checking) return { habits: [next] }
-  const t = iso(now)
-  const { doneAt: _d, ...rest } = child
-  return { habits: [next], tasks: [checking ? { ...rest, doneAt: t, updatedAt: t } : { ...rest, updatedAt: t }] }
+  // 下ろした先と、そこからさらに下ろした先も一緒に
+  return { habits: [next], tasks: doneTasks(data, child, checking, now) }
 }
 
-/** 習慣を「やること」にする（1 回やれば終わるもの）。同じ期間の列の C に入れ、習慣は消す */
+/**
+ * 時間軸の習慣の行のチェック。「その日」で出している前の期間・次の期間の分（週が月をまたぐときの 11/30 や 12/1）は、
+ * 今の期間ではなく、その日の期間にチェックを付ける（付け直す）
+ */
+export function checkHabitFor(data: PlannerData, habit: Habit, dueDay: Date | undefined, now: Date): Changes {
+  if (dueDay && periodKey(habit.period, dueDay) !== periodKey(habit.period, now)) {
+    return { habits: [toggleHabitOnDay(habit, dueDay, now)] }
+  }
+  return toggleHabitAll(data, habit, now)
+}
+
+/**
+ * 習慣を「やること」にする（1 回やれば終わるもの）。同じ期間の列の C に入れ、習慣は消す。
+ * プロジェクトのルーチン目標なら、プロジェクトの期日目標（日付なし）にして、同じ期間の列にも下ろしておく（終えるまで列に残す）。
+ * 習慣から下ろして、まだ終えていないやることは消す
+ */
 export function habitToTask(data: PlannerData, habit: Habit, now: Date): Changes {
-  const task = newTask(data, { title: habit.title, horizon: periodHorizon(habit.period), priority: 'C', projectId: habit.projectId }, now)
-  return { tasks: [habit.note ? { ...task, note: habit.note } : task], deleteHabitIds: [habit.id] }
+  const horizon = periodHorizon(habit.period)
+  const note = habit.note ? { note: habit.note } : {}
+  const copies = openHabitCopies(data, habit, now)
+  const cleanup = { deleteHabitIds: [habit.id], ...(copies.length ? { deleteTaskIds: copies } : {}) }
+  if (!habit.projectId) {
+    return { tasks: [{ ...newTask(data, { title: habit.title, horizon, priority: 'C' }, now), ...note }], ...cleanup }
+  }
+  const goal: Task = {
+    ...newTask(data, { title: habit.title, horizon: 'pool', priority: 'C', projectId: habit.projectId }, now),
+    goalOrder: nextGoalOrder(data, habit.projectId),
+    ...note,
+  }
+  const t = iso(now)
+  const copy: Task = {
+    id: crypto.randomUUID(),
+    title: habit.title,
+    horizon,
+    priority: 'C',
+    order: nextOrder(data.tasks, horizon, 'C', now),
+    parentId: goal.id,
+    projectId: habit.projectId,
+    ...note,
+    createdAt: t,
+    updatedAt: t,
+  }
+  return { tasks: [goal, copy], ...cleanup }
 }
 
 /** 毎月の習慣の、その月の「その日」（日が無い月は月末に寄せる） */
@@ -928,21 +1045,28 @@ export function toggleHabitOnDay(habit: Habit, day: Date, now: Date): Habit {
   const t = iso(now)
   const current = periodKey(habit.period, day) === periodKey(habit.period, now)
   if (history.includes(key)) {
-    const { checkedAt: _c, ...rest } = habit
     const next = history.filter((d) => d !== key)
-    const keepCheck = habit.checkedAt && dayKey(new Date(habit.checkedAt)) !== key
-    return { ...(keepCheck ? habit : rest), history: next, updatedAt: t }
+    if (!habit.checkedAt || dayKey(new Date(habit.checkedAt)) !== key) return { ...habit, history: next, updatedAt: t }
+    // 今のチェックの日を外した: 同じ期間にほかのチェックの日があれば、そちらを今のチェックにする（時間軸と振り返りが食い違わないように）
+    const { checkedAt: _c, ...rest } = habit
+    const other = next.filter((d) => periodKey(habit.period, noonOf(d)) === periodKey(habit.period, day)).pop()
+    return { ...rest, ...(other ? { checkedAt: iso(noonOf(other)) } : {}), history: next, updatedAt: t }
   }
-  const next = [...history, key].sort().slice(-HABIT_HISTORY_LIMIT)
   const at = key === dayKey(now) ? now : new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12)
   const check = current && !inSamePeriod(habit.period, habit.checkedAt, now)
-  return { ...habit, ...(check ? { checkedAt: iso(at) } : {}), history: next, updatedAt: t }
+  return { ...habit, ...(check ? { checkedAt: iso(at) } : {}), ...withHistoryDay(habit, key), updatedAt: t }
 }
 
 /** やることを、その日に終えたことにする（振り返りから付け直す。今日なら今の時刻、過ぎた日ならその日の正午） */
 export function finishOnDay(data: PlannerData, task: Task, day: Date, now: Date): Changes {
+  if (task.doneAt) return {}
   const at = dayKey(day) === dayKey(now) ? now : new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12)
-  return toggleDone(data, task, at)
+  const tasks = doneTasks(data, task, true, at)
+  // 習慣から下ろしたものなら、その日の期間に習慣のチェックを付ける（今の期間のチェックを、前の日で上書きしない）
+  const habitId = habitIdOf(task, new Map(data.tasks.map((t) => [t.id, t])))
+  const habit = habitId ? data.habits.find((x) => x.id === habitId) : undefined
+  if (!habit || habitDoneInPeriod(habit, day)) return { tasks }
+  return { tasks, habits: [toggleHabitOnDay(habit, day, now)] }
 }
 
 /**

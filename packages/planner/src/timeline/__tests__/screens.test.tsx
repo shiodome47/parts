@@ -330,3 +330,49 @@ describe('今日の見え方（習慣をまとめる・プロジェクトで今�
     expect(screen.getByRole('region', { name: '自治会' }).classList.contains('pl-today-none')).toBe(true)
   })
 })
+
+describe('キーボード・名前の書き換えで、行を持ち上げたままにしない', () => {
+  afterEach(() => localStorage.clear())
+
+  /** 自治会に、日付の無い目標 3 つ */
+  function goals(): PlannerData {
+    let d = sample()
+    const p = d.projects[0]
+    for (const title of ['G1', 'G2', 'G3']) d = applyChanges(d, { tasks: [newTask(d, { title, horizon: 'pool', priority: 'C', projectId: p.id }, NOW)] })
+    return d
+  }
+
+  it('目標の名前を書き換えて Enter を押しても、行は持ち上がらない（そのあともドラッグできる）', () => {
+    const onChange = vi.fn<(c: Changes) => void>()
+    render(<Projects data={goals()} now={NOW} onChange={onChange} />)
+    fireEvent.doubleClick(screen.getByText('G1'))
+    const input = screen.getByRole('textbox', { name: '期日目標の名前' })
+    fireEvent.change(input, { target: { value: 'G1 あたらしい' } })
+    fireEvent.keyDown(input, { key: ' ', code: 'Space' })
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' })
+    expect(document.querySelector('.pl-dragging')).toBeNull()
+    expect(onChange.mock.calls.at(-1)![0].tasks![0].title).toBe('G1 あたらしい')
+  })
+
+  it('行の中のボタンでスペース・Enter を押しても、行は持ち上がらない', () => {
+    render(<Timeline data={sample()} now={NOW} onChange={() => {}} />)
+    const check = screen.getByRole('checkbox', { name: '「総会の資料」を終える' })
+    fireEvent.keyDown(check, { key: ' ', code: 'Space' })
+    fireEvent.keyDown(check, { key: 'Enter', code: 'Enter' })
+    expect(document.querySelector('.pl-dragging')).toBeNull()
+  })
+
+  it('… のメニューは、開くと最初の選択肢にフォーカス。矢印で移り、Esc で閉じて … に戻る', async () => {
+    render(<Timeline data={sample()} now={NOW} onChange={() => {}} />)
+    const button = screen.getByRole('button', { name: '「総会の資料」の操作' })
+    fireEvent.click(button)
+    await act(() => new Promise((r) => requestAnimationFrame(() => r(undefined))))
+    const items = screen.getAllByRole('menuitem').filter((x) => !(x as HTMLButtonElement).disabled)
+    expect(document.activeElement).toBe(items[0])
+    fireEvent.keyDown(items[0], { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(items[1])
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(document.activeElement).toBe(button)
+  })
+})

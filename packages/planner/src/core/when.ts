@@ -1,4 +1,4 @@
-import { addDays, dayKey, inSamePeriod, monthDayDate, weekStart, dayLabel } from './period'
+import { addDays, dayKey, monthDayDate, periodKey, weekStart, dayLabel } from './period'
 import type { BoardHorizon, Habit } from './types'
 
 /**
@@ -45,35 +45,65 @@ export function whenDate(h: Habit, now: Date): Date | undefined {
   return new Date(now.getFullYear(), y.month - 1, Math.min(y.day ?? 1, last))
 }
 
+/** YYYY-MM-DD を、その日の Date に（端末の時刻） */
+function dayDate(key: string): Date {
+  const [y, m, d] = key.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
 /**
- * その列に、自動で出す「その日」（出さないなら undefined）。今の期間にもうチェックしていれば出さない
- * - 今日: 毎月の日・毎週の曜日・毎年の日付が、今日か、過ぎていてまだのとき
- * - 今週: 毎月の日・毎年の日付が、今週のとき
+ * 習慣の、その日を含む期間（毎月ならその月）に、チェックがあるか（今のチェック checkedAt か、日ごとの記録）。
+ * 「今」の期間ではなく、その日の期間で見る（週や月の変わり目に、前の期間の分を正しく扱うため）
+ */
+export function habitDoneInPeriod(h: Habit, day: Date): boolean {
+  const key = periodKey(h.period, day)
+  const at = h.checkedAt ? new Date(h.checkedAt) : undefined
+  if (at && !Number.isNaN(at.getTime()) && periodKey(h.period, at) === key) return true
+  return (h.history ?? []).some((d) => typeof d === 'string' && periodKey(h.period, dayDate(d)) === key)
+}
+
+/** 毎年の「その日」の、その年の日付（日が無い月は月末に寄せる。月だけのときは 1 日） */
+function yearDate(h: Habit, year: number): Date | undefined {
+  const y = parseYearDay(h.yearDay)
+  if (!y) return undefined
+  const last = new Date(year, y.month, 0).getDate()
+  return new Date(year, y.month - 1, Math.min(y.day ?? 1, last))
+}
+
+/** その週（月〜日）の中の「その日」（毎月・毎年。週が月・年をまたぐときは、両方の月・年を見る） */
+function datesInWeek(h: Habit, now: Date): Date[] {
+  const start = weekStart(now)
+  const end = addDays(start, 6)
+  const found = new Map<string, Date>()
+  for (const m of [start, end]) {
+    const due = h.period === 'month' ? monthDayDate(h.day!, m) : yearDate(h, m.getFullYear())
+    if (due && dayKey(due) >= dayKey(start) && dayKey(due) <= dayKey(end)) found.set(dayKey(due), due)
+  }
+  return [...found.values()].sort((a, b) => a.getTime() - b.getTime())
+}
+
+/**
+ * その列に、自動で出す「その日」（出さないなら undefined）。その日の期間に、もうチェックしていれば出さない
+ * - 今日: 毎月の日・毎週の曜日・毎年の日付が、今日か、過ぎていてまだのとき（今の期間の分）
+ * - 今週: 毎月の日・毎年の日付が、今週のとき（週が月・年をまたぐときは、両方の分）
  * - 数か月: 毎年の日付・月が、今月のとき
  */
 export function autoDue(h: Habit, column: BoardHorizon, now: Date): Date | undefined {
-  if (!hasWhen(h) || h.period === 'day' || inSamePeriod(h.period, h.checkedAt, now)) return undefined
-  const due = whenDate(h, now)
-  if (!due) return undefined
-  const yearMonthOnly = h.period === 'year' && !parseYearDay(h.yearDay)!.day
-  if (column === 'today') return !yearMonthOnly && dayKey(due) <= dayKey(now) ? due : undefined
+  if (!hasWhen(h) || h.period === 'day') return undefined
+  const yearMonthOnly = isMonthOnly(h)
+  if (column === 'today') {
+    if (yearMonthOnly) return undefined
+    const due = whenDate(h, now)
+    return due && dayKey(due) <= dayKey(now) && !habitDoneInPeriod(h, due) ? due : undefined
+  }
   if (column === 'week') {
     if (h.period === 'week' || yearMonthOnly) return undefined
-    if (h.period === 'month') return dueInWeek(h, now)
-    const start = weekStart(now)
-    return dayKey(due) >= dayKey(start) && dayKey(due) <= dayKey(addDays(start, 6)) ? due : undefined
+    return datesInWeek(h, now).find((d) => !habitDoneInPeriod(h, d))
   }
-  if (column === 'month') return h.period === 'year' && due.getMonth() === now.getMonth() ? due : undefined
-  return undefined
-}
-
-/** 毎月の「その日」が今週（月〜日）なら、その日（週が月をまたぐときは、両方の月を見る） */
-function dueInWeek(h: Habit, now: Date): Date | undefined {
-  const start = weekStart(now)
-  const end = addDays(start, 6)
-  for (const m of [start, end]) {
-    const due = monthDayDate(h.day!, m)
-    if (due && dayKey(due) >= dayKey(start) && dayKey(due) <= dayKey(end)) return due
+  if (column === 'month') {
+    if (h.period !== 'year') return undefined
+    const due = whenDate(h, now)
+    return due && due.getMonth() === now.getMonth() && !habitDoneInPeriod(h, due) ? due : undefined
   }
   return undefined
 }

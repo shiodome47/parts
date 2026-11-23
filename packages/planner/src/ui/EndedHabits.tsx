@@ -1,7 +1,7 @@
 import { GraduationCap, Moon } from 'lucide-react'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { dayKey, dueLabel } from '../core'
-import { endHabit, habitRecord, resumeHabit } from '../core'
+import { endHabit, habitRecord, removeHabit, resumeHabit } from '../core'
 import type { Habit, HabitEnd, Period, PlannerData } from '../core'
 import type { PlannerStore } from './types'
 import { Dialog } from './Dialog'
@@ -34,7 +34,7 @@ const UNIT: Record<Period, { name: string; count: string }> = {
 export function useHabitEnd(habit: Habit, data: PlannerData, apply: Apply): { items: MenuItem[]; dialogs: ReactNode } {
   const [ending, setEnding] = useState(false)
   const [removing, setRemoving] = useState(false)
-  const remove = () => (habit.history?.length ? setRemoving(true) : apply({ deleteHabitIds: [habit.id] }))
+  const remove = () => (habit.history?.length ? setRemoving(true) : apply(removeHabit(data, habit, new Date())))
   const items: MenuItem[] = [
     { label: habit.endedAt ? '卒業・お休みを変える…' : '卒業・お休みにする…', onSelect: () => setEnding(true) },
     { label: '完全に消す', danger: true, onSelect: remove },
@@ -56,7 +56,7 @@ export function useHabitEnd(habit: Habit, data: PlannerData, apply: Apply): { it
         onClose={() => setRemoving(false)}
         onRemove={() => {
           setRemoving(false)
-          apply({ deleteHabitIds: [habit.id] })
+          apply(removeHabit(data, habit, new Date()))
         }}
       />
     </>
