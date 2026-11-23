@@ -97,6 +97,19 @@ function App() {
 
 「これまでの習慣」の 1 行には、卒業（🎓）かお休み（🌙）の印・名前・期間（9/1〜11/22）・できた割合（毎日なら「できた日 82%」。毎週なら週で数える）・ひとことが出ます。時間軸では各列の習慣の一番下、プロジェクトではルーチン目標の一番下（「これまでのルーチン目標」）です。
 
+### 習慣の 3 段階（低・中・上）
+
+「瞑想 30 分」のように高い目標だと、できない日は 0 になってやめてしまいがちです。気になる習慣にだけ、低・中・上の 3 段階を付けられます（例: 瞑想 低 3 分・中 10 分・上 30 分）。低でもやれば「できた」に数え、頑張った日は色で分かります。
+
+| 操作 | どうなるか |
+|---|---|
+| 習慣・ルーチン目標の … →「3 段階にする…」 | 低・中・上の中身を書く（どれも空でもよい）。まだの日は、名前の下に「低 3分・中 10分・上 30分」 |
+| チェック | 「低」で付く（時間軸・プロジェクト・下ろした先のどこで付けても）。名前の下に「低 中 上」が出る |
+| 「中」「上」を押す | その日（毎週・毎月はその期間）の段階を上げる。チェックの色が変わる（低は薄い緑・中はいつもの緑・上は濃紫） |
+| … →「3 段階を変える…」→「3 段階をやめる」 | 3 段階をやめる。それまでの段階の記録は残る |
+
+段階を付けていない習慣は、見た目も操作も今までどおりです。チェックを外すと、その日の段階も消えます。振り返り（`habitDoneOn`・`streak`・`habitRecord`）は、今までどおり低以上を「できた」と数えます。段階は `habitLevelOn(habit, day)` で読めます（アプリの振り返りで色を分けるのに使う）。
+
 ### 色を合わせる
 
 見た目は `.planner` の中だけに効き、色は変数で決まります。使う側の CSS で上書きすると、アプリの色に合わせられます。
@@ -115,6 +128,8 @@ function App() {
 
 ほかに `--pl-page-bg`・`--pl-accent-text`・`--pl-danger`・`--pl-warning`・`--pl-ok` があります。プロジェクトの色は `PROJECT_COLORS`（`teal`・`blue` など 8 色）。
 
+習慣の 3 段階の色は `--pl-tier-top`（上。濃紫 `#4a2a6e`、暗い画面では `#a07cd0`）・`--pl-tier-top-text`（濃紫の上の ✓ と文字の色）・`--pl-tier-low`（低。`--pl-accent` を薄くした緑）です。中は `--pl-accent` です。
+
 チェックの丸・四角の枠は、`--pl-muted` と `--pl-border` を混ぜた色です（区切り線より濃い）。中は `--pl-panel` で塗るので、中のプロジェクトの灰色（`--pl-panel-2`）や「今日」の色の帯の上でも見えます。
 
 ## 土台（core）
@@ -130,7 +145,7 @@ const data: PlannerData = { tasks: [], habits: [], projects: [] }
 | 形 | 中身 |
 |---|---|
 | `Task` | やること。`horizon`（列）・`priority`（A〜D・P）・`due`（期日 YYYY-MM-DD）・`projectId` など。回数の目標は `count`（`target` めざす数・`done` 今の数・`log` 日ごとに足した数） |
-| `Habit` | 習慣（くり返し）。記録（`history`）が上限で古い日を消したら、残っている一番古い日を `historyFrom` に。`period`（毎日・毎週・毎月・毎年）と「その日」（`weekday`・`day`・`yearDay`）。終えたら `endedAt`・`endedAs`（`'graduated'` 卒業／`'paused'` お休み）・`endNote`（ひとこと）。また始めたら、休んでいた間を `breaks` に残す |
+| `Habit` | 習慣（くり返し）。記録（`history`）が上限で古い日を消したら、残っている一番古い日を `historyFrom` に。`period`（毎日・毎週・毎月・毎年）と「その日」（`weekday`・`day`・`yearDay`）。終えたら `endedAt`・`endedAs`（`'graduated'` 卒業／`'paused'` お休み）・`endNote`（ひとこと）。また始めたら、休んでいた間を `breaks` に残す。3 段階は `tiers`（`low`・`mid`・`top` の中身）と `levels`（チェックした日ごとの段階 1 低・2 中・3 上。無い日は段階を付ける前のチェック） |
 | `Project` | プロジェクト・テーマ。テーマの中にプロジェクトを入れられる（1 段だけ）。`goalId` は、そのプロジェクトが「中身」になっている期日目標 |
 
 アプリは、`PlannerData` に自分の項目（日記など）を足した形で持って構いません。土台の関数は、足した項目を変えずに残します。
@@ -171,6 +186,7 @@ data = applyChanges(data, toggleDone(data, data.tasks[0], now))
 | 習慣を終える | `endHabit(data, habit, 'graduated' \| 'paused', ひとこと, now)` 卒業・お休み（終えた習慣なら、終え方とひとことだけ変える）／`resumeHabit(data, habit, now)` また始める／`endedHabits(habits)` 終えた習慣を新しい順に。`buildColumns` の列は、終えた習慣を `habits` に入れず `ended` に入れる |
 | くり返しの「その日」 | 毎月: `withDay(habit, 20 \| 'end' \| 'w2-3' \| 'wL-5')`／毎週・毎年: `withWhen(habit, 3 \| '12-06' \| '12')`／`whenLabel` `whenDate` `monthDayDate` |
 | プロジェクト | `newProject` `topProjects` `childProjects` `moveProject` `removeProject` `reorderProjects` `projectGoals`（終えていないもの・終えたもの＝新しく終えた順）`reorderGoals` |
+| 習慣の 3 段階 | `setHabitTiers(habit, { low, mid, top } \| undefined, now)` 3 段階にする・中身を変える・やめる／`setHabitLevel(habit, day, 1 \| 2 \| 3, now)` その日（その期間）の段階を決める／`habitLevelOn(habit, day)` その日の段階（記録が無ければ undefined）／`tiersLabel(tiers)` 「低 3分・中 10分・上 30分」／`LEVEL_NAME` 低・中・上。チェック（`toggleHabit` など）で「低」が付き、外すと消える |
 | 回数の目標 | `setCount(data, task, { target, done } \| undefined, now)` 回数の目標にする・直す・やめる／`addCount(data, task, 1, now)` 足す（-1 でへらす）／`countedTask(data, task)` 数える項目（下ろした先なら元）／`countsOn(data, day)` その日に足した回数 |
 | 目標を細かく分ける | `splitGoal(data, goal, name, now)` 中身のプロジェクトを作る／`linkGoal(data, goal, project, now)` 今あるものをつなぐ／`unlinkGoal(project, now)`／`goalBreakdown(data, goal)` 中身と進み具合／`breakdownOf(data, project)` どの目標の中身か／`linkableProjects(data, goal)` つなげるもの |
 | 振り返り | `doneOn(data, day, now)` その日に済ませたこと／`streak(habit, now)` 続いた日数／`toggleHabitOnDay` `finishOnDay`（過ぎた日に付け直す）／`habitActiveOn(habit, day)` その日に続けていたか（始める前・終えたあと・休んでいた間は数えない。「毎日 3/4」の分母に使う）／`habitRecord(habit, now)` 始めてから終えるまでの、できた数と期間の数 |
@@ -181,7 +197,7 @@ data = applyChanges(data, toggleDone(data, data.tasks[0], now))
 
 ## English
 
-Building blocks for a timeline (today / this week / months / this year / life) and projects, taken from the Magic Lamp app. Screens: `<Timeline data now onChange />` (`@shiodome47/planner/timeline`) and `<Projects data now onChange />` (`@shiodome47/planner/projects`); import `@shiodome47/planner/style.css`. Styles apply only inside `.planner`; override `--pl-*` variables to match your app. `@shiodome47/planner/core` holds the data model (`Task`, `Habit`, `Project`, `PlannerData`) and the rules — which column a dated task belongs to, the next date of a recurring habit ("2nd Sunday of each month", "every December 6"), placing, finishing and reordering, and review helpers. On the timeline, a project's habits (2+ in a column) collapse into one row ("▸ Yoga — 7 left"); the projects screen has a "Today" toggle that highlights what is in today's column (`todayMarks`). Tasks can be counted goals (`count`: target / done / per-day log; `setCount` / `addCount`), shown as "20/100 回 ＋1". A goal can be broken down into its own project (`splitGoal` / `linkGoal`, stored as `Project.goalId`); the goal row shows the inner project's progress. Habits can be ended as "graduated" or "paused" (`endHabit` / `resumeHabit`); their check history is kept, they move to a collapsed "past habits" list, and `habitActiveOn` / `habitRecord` count only the days a habit was active. Functions never mutate data; they return `Changes`, which you save wherever you like and apply locally with `applyChanges`. Pass the current time (`now`) explicitly. UI labels are Japanese.
+Building blocks for a timeline (today / this week / months / this year / life) and projects, taken from the Magic Lamp app. Screens: `<Timeline data now onChange />` (`@shiodome47/planner/timeline`) and `<Projects data now onChange />` (`@shiodome47/planner/projects`); import `@shiodome47/planner/style.css`. Styles apply only inside `.planner`; override `--pl-*` variables to match your app. `@shiodome47/planner/core` holds the data model (`Task`, `Habit`, `Project`, `PlannerData`) and the rules — which column a dated task belongs to, the next date of a recurring habit ("2nd Sunday of each month", "every December 6"), placing, finishing and reordering, and review helpers. On the timeline, a project's habits (2+ in a column) collapse into one row ("▸ Yoga — 7 left"); the projects screen has a "Today" toggle that highlights what is in today's column (`todayMarks`). Tasks can be counted goals (`count`: target / done / per-day log; `setCount` / `addCount`), shown as "20/100 回 ＋1". A goal can be broken down into its own project (`splitGoal` / `linkGoal`, stored as `Project.goalId`); the goal row shows the inner project's progress. Habits can be ended as "graduated" or "paused" (`endHabit` / `resumeHabit`); their check history is kept, they move to a collapsed "past habits" list, and `habitActiveOn` / `habitRecord` count only the days a habit was active. A habit can have three tiers — low / mid / top (`tiers`, `setHabitTiers`): checking it records "low", and the row shows 低・中・上 to raise that day's level (`setHabitLevel`, read with `habitLevelOn`); the checkbox turns pale green for low and deep purple for top. Functions never mutate data; they return `Changes`, which you save wherever you like and apply locally with `applyChanges`. Pass the current time (`now`) explicitly. UI labels are Japanese.
 
 ## License
 

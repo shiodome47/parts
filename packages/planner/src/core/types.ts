@@ -106,9 +106,30 @@ export interface Habit {
   endNote?: string
   /** 前に終えて、また始めたときの記録（古い順）。休んでいた間は、振り返りの数に入れない */
   breaks?: HabitBreak[]
+  /**
+   * 3 段階（低・中・上）の中身（例: 低 3分・中 10分・上 30分）。付けたい習慣にだけ付ける。
+   * 付けると、チェックは「低」で付き、中・上までやれた日は上げられる
+   */
+  tiers?: HabitTiers
+  /**
+   * チェックした日（history の日）ごとの段階。1 低・2 中・3 上。
+   * 段階を付けた習慣でチェックすると 1 が入る。無い日は、段階を付ける前のチェック（ふつうに、できた）
+   */
+  levels?: Record<string, HabitLevel>
   createdAt: string
   updatedAt: string
 }
+
+/** 3 段階の中身（どれも、なくてもよい。例: { low: '3分', mid: '10分', top: '30分' }） */
+export interface HabitTiers {
+  low?: string
+  mid?: string
+  top?: string
+}
+
+/** どこまでできたか。1 低・2 中・3 上 */
+export type HabitLevel = 1 | 2 | 3
+export const HABIT_LEVELS: HabitLevel[] = [1, 2, 3]
 
 /** 習慣の終え方。graduated 卒業（身についた）／paused お休み（続かなかった・今はやめる） */
 export type HabitEnd = 'graduated' | 'paused'
