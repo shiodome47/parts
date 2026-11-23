@@ -811,6 +811,19 @@ export function reorderHabits(data: PlannerData, ids: string[], activeId: string
   return { habits }
 }
 
+/**
+ * プロジェクトのルーチン目標をドラッグで並べ替える（同じくり返しのものどうしだけ）。
+ * 習慣の並び（order）は、時間軸の同じ期間の列と共有なので、その期間の習慣全体の並びの中で、
+ * 落とした先の習慣の位置へ動かす（ほかのプロジェクトの習慣との前後は、できるだけそのまま）
+ */
+export function reorderRoutine(data: PlannerData, activeId: string, overId: string, now: Date): Changes {
+  const active = data.habits.find((h) => h.id === activeId)
+  const over = data.habits.find((h) => h.id === overId)
+  if (!active || !over || active.id === over.id || active.period !== over.period) return {}
+  const ids = data.habits.filter((h) => h.period === active.period).sort(byOrder).map((h) => h.id)
+  return reorderHabits(data, ids, activeId, overId, now)
+}
+
 /** プロジェクトをドラッグで並べ替える（左ほど優先が高い） */
 export function reorderProjects(data: PlannerData, activeId: string, overId: string, now: Date): Changes {
   // 同じところ（いちばん上・同じテーマの中）に並ぶものの中で並べ替える

@@ -20,6 +20,7 @@ import {
   removeProject,
   removeTask,
   reorderProjects,
+  reorderRoutine,
   toggleDone,
   toggleHabit,
   todayMarks,
@@ -493,11 +494,18 @@ function ProjectBody({
 
       <div className="pl-block">
         <h3 className="pl-block-title">ルーチン目標</h3>
-        <ul className="pl-list">
-          {routines.map((r) => (
-            <RoutineRow key={r.id} r={r} data={data} apply={apply} now={now} />
-          ))}
-        </ul>
+        {/* 行をつかんで並べ替える（同じくり返しのものどうし。毎日は毎日の中で） */}
+        <SortableList
+          ids={routines.map((r) => r.id)}
+          strategy={verticalListSortingStrategy}
+          onMove={(a, o) => apply(reorderRoutine(data, a, o, new Date()))}
+        >
+          <ul className="pl-list">
+            {routines.map((r) => (
+              <RoutineRow key={r.id} r={r} data={data} apply={apply} now={now} />
+            ))}
+          </ul>
+        </SortableList>
         <div className="pl-add-row">
           <AddInput
             placeholder="＋ ルーチン目標を足す"
@@ -526,8 +534,15 @@ function RoutineRow({ r, data, apply, now }: { r: Habit; data: PlannerData; appl
   const end = useHabitEnd(r, data, apply)
   const checked = inSamePeriod(r.period, r.checkedAt, now)
   const today = useContext(TodayContext)?.habits.has(r.id)
+  // 行をつかんでドラッグで並べ替える（マウスは少し動かすと、指は長押しで）
+  const row = useSortableRow(r.id)
   return (
-    <li className={`pl-habit${checked ? ' pl-done' : ''}${today ? ' pl-today' : ''}`}>
+    <li
+      ref={row.ref}
+      style={row.style}
+      className={`pl-habit${checked ? ' pl-done' : ''}${today ? ' pl-today' : ''}${row.isDragging ? ' pl-dragging' : ''}`}
+      {...row.handleProps}
+    >
       <button
         type="button"
         role="checkbox"
