@@ -14,7 +14,7 @@ import {
   setDue,
   setPriority,
   toggleDone,
-  toggleHabitAll,
+  checkHabitFor,
   bringToToday,
   isForTomorrow,
   postponeToTomorrow,
@@ -243,7 +243,8 @@ export function HabitRow({ view, data, store, now }: { view: HabitView; data: Pl
         aria-checked={checked}
         aria-label={checked ? `「${habit.title}」のチェックを外す` : `「${habit.title}」をチェック`}
         className="pl-square"
-        onClick={() => apply(toggleHabitAll(data, habit, now))}
+        // 「その日」で出している前・次の期間の分（11/30 など）は、その期間にチェックを付ける
+        onClick={() => apply(checkHabitFor(data, habit, auto ? dueDay : undefined, now))}
       >
         {checked && <Check aria-hidden="true" />}
       </button>

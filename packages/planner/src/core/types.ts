@@ -77,6 +77,8 @@ export interface Habit {
   checkedAt?: string
   /** チェックした日（YYYY-MM-DD）の記録。振り返りに使う（古いものから消し、最大 800 日分） */
   history?: string[]
+  /** 記録が上限まであって古い日を消したとき、残っている一番古い日（YYYY-MM-DD）。振り返りの数は、この日から数える */
+  historyFrom?: string
   /** メモ（名前を押すと開く。アファメーションの文章・朝ルーチンの手順など） */
   note?: string
   /**

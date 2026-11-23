@@ -3,7 +3,7 @@ import { verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { SortableList, useLampSensors, useSortableRow } from '../ui/dnd'
 import { CardBoard, type CardBoardCardState } from 'linkshelf'
 import { changedProjects, projectCards, projectsInReadingOrder } from './projectCards'
-import { createContext, useContext, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { safeLocalStore } from '../ui/storage'
 import { inSamePeriod } from '../core'
 import { PERIOD_NAME } from '../core'
@@ -20,8 +20,9 @@ import {
   removeProject,
   removeTask,
   reorderProjects,
+  reorderRoutine,
   toggleDone,
-  toggleHabit,
+  toggleHabitAll,
   todayMarks,
   topProjects,
   unlinkGoal,
@@ -359,13 +360,25 @@ function SubProject({ project, parent, data, apply, now }: { project: Project; p
 }
 
 function ConfirmRemove({ project, extra, onCancel, onRemove }: { project: Project; extra: string; onCancel: () => void; onRemove: () => void }) {
+  // 開いたら「キャンセル」にフォーカス（Enter をうっかり押しても消えないように）。Esc でやめる
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => cancelRef.current?.focus(), [])
   return (
-    <div className="pl-confirm" role="alertdialog" aria-label="プロジェクトを消す">
+    <div
+      className="pl-confirm"
+      role="alertdialog"
+      aria-label="プロジェクトを消す"
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') return
+        e.stopPropagation()
+        onCancel()
+      }}
+    >
       <p className="pl-text">
         「{project.name}」と、その期日目標・ルーチン目標（列に置いたものも）を消します。{extra}取り消せません。
       </p>
       <div className="pl-row pl-row-end">
-        <button type="button" className="pl-button" onClick={onCancel}>
+        <button ref={cancelRef} type="button" className="pl-button" onClick={onCancel}>
           キャンセル
         </button>
         <button type="button" className="pl-button pl-button-danger" onClick={onRemove}>
@@ -493,11 +506,18 @@ function ProjectBody({
 
       <div className="pl-block">
         <h3 className="pl-block-title">ルーチン目標</h3>
-        <ul className="pl-list">
-          {routines.map((r) => (
-            <RoutineRow key={r.id} r={r} data={data} apply={apply} now={now} />
-          ))}
-        </ul>
+        {/* 行をつかんで並べ替える（同じくり返しのものどうし。毎日は毎日の中で） */}
+        <SortableList
+          ids={routines.map((r) => r.id)}
+          strategy={verticalListSortingStrategy}
+          onMove={(a, o) => apply(reorderRoutine(data, a, o, new Date()))}
+        >
+          <ul className="pl-list">
+            {routines.map((r) => (
+              <RoutineRow key={r.id} r={r} data={data} apply={apply} now={now} />
+            ))}
+          </ul>
+        </SortableList>
         <div className="pl-add-row">
           <AddInput
             placeholder="＋ ルーチン目標を足す"
@@ -526,15 +546,23 @@ function RoutineRow({ r, data, apply, now }: { r: Habit; data: PlannerData; appl
   const end = useHabitEnd(r, data, apply)
   const checked = inSamePeriod(r.period, r.checkedAt, now)
   const today = useContext(TodayContext)?.habits.has(r.id)
+  // 行をつかんでドラッグで並べ替える（マウスは少し動かすと、指は長押しで）
+  const row = useSortableRow(r.id)
   return (
-    <li className={`pl-habit${checked ? ' pl-done' : ''}${today ? ' pl-today' : ''}`}>
+    <li
+      ref={row.ref}
+      style={row.style}
+      className={`pl-habit${checked ? ' pl-done' : ''}${today ? ' pl-today' : ''}${row.isDragging ? ' pl-dragging' : ''}`}
+      {...row.handleProps}
+    >
       <button
         type="button"
         role="checkbox"
         aria-checked={checked}
         aria-label={checked ? `「${r.title}」のチェックを外す` : `「${r.title}」をチェック`}
         className="pl-square"
-        onClick={() => apply({ habits: [toggleHabit(r, now)] })}
+        // 時間軸に下ろしたもの（やること）があれば、その「終えた」も合わせる（時間軸のチェックと同じ）
+        onClick={() => apply(toggleHabitAll(data, r, now))}
       >
         {checked && <Check aria-hidden="true" />}
       </button>

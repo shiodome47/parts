@@ -38,7 +38,9 @@ function startDay(habit: Habit, days: Set<string>): string {
   const created = isoDay(habit.createdAt) ?? ''
   const history = habit.history ?? []
   const first = [...days].sort()[0]
-  if (history.length >= HABIT_HISTORY_LIMIT && history[0] > created) return history[0]
+  // 記録の上限で古い日を消したときは、残っている一番古い日から（historyFrom。前の版のデータは、上限まであれば最初の日から）
+  if (habit.historyFrom && habit.historyFrom > created) return habit.historyFrom
+  if (!habit.historyFrom && history.length >= HABIT_HISTORY_LIMIT && history[0] > created) return history[0]
   // 始めた日より前の日にチェックを付け直したときは、その日から
   return first && first < created ? first : created
 }
@@ -131,7 +133,8 @@ export interface DoneItem {
 export function doneOn(data: PlannerData, day: Date, now: Date): DoneItem[] {
   const key = dayKey(day)
   const projects = new Map(data.projects.map((p) => [p.id, p]))
-  const doneParents = new Set(data.tasks.filter((t) => t.parentId && t.doneAt).map((t) => t.parentId!))
+  // 同じ日に、下ろした先で終えた元だけを除く（元を別の日にあらためて終えたときは、その日に出す）
+  const doneParents = new Set(data.tasks.filter((t) => t.parentId && t.doneAt && dayKey(new Date(t.doneAt)) === key).map((t) => t.parentId!))
   return data.tasks
     .filter((t) => t.doneAt && dayKey(new Date(t.doneAt)) === key && !doneParents.has(t.id))
     .sort((a, b) => a.doneAt!.localeCompare(b.doneAt!))

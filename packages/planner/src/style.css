@@ -1363,10 +1363,13 @@
   width: 13px;
   height: 13px;
 }
-/* 日付の無いものは、行をつかんで並べ替えられる */
+/* 日付の無いものは、行をつかんで並べ替えられる（長押しで文字が選ばれないように） */
 .planner .pl-goal-free {
   cursor: grab;
   touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 .planner .pl-goal-free.pl-dragging {
   cursor: grabbing;
