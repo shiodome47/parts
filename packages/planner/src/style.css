@@ -354,9 +354,13 @@
   width: 20px;
   height: 20px;
   padding: 0;
-  border: 1.5px solid var(--pl-border);
+  /*
+   * 枠は区切り線より濃く、中は白（パネルの色）で塗る。
+   * 中のプロジェクトの灰色の背景や、「今日」の色の帯の上でも見えるように
+   */
+  border: 1.5px solid color-mix(in srgb, var(--pl-muted) 65%, var(--pl-border));
   border-radius: 50%;
-  background: transparent;
+  background: var(--pl-panel);
   color: var(--pl-accent-text);
   cursor: pointer;
 }

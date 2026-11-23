@@ -104,7 +104,7 @@ function App() {
 ```css
 .planner {
   --pl-accent: #2563eb;   /* 決定のボタン・今日の列・ドラッグの線 */
-  --pl-panel: #fff;       /* 列・カード */
+  --pl-panel: #fff;       /* 列・カード・チェックの丸と四角の中 */
   --pl-panel-2: #f3f4f6;  /* 入力欄・行にマウスを乗せたとき */
   --pl-border: #e5e7eb;
   --pl-text: #111827;
@@ -114,6 +114,8 @@ function App() {
 ```
 
 ほかに `--pl-page-bg`・`--pl-accent-text`・`--pl-danger`・`--pl-warning`・`--pl-ok` があります。プロジェクトの色は `PROJECT_COLORS`（`teal`・`blue` など 8 色）。
+
+チェックの丸・四角の枠は、`--pl-muted` と `--pl-border` を混ぜた色です（区切り線より濃い）。中は `--pl-panel` で塗るので、中のプロジェクトの灰色（`--pl-panel-2`）や「今日」の色の帯の上でも見えます。
 
 ## 土台（core）
 
