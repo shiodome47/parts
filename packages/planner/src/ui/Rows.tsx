@@ -28,6 +28,7 @@ import { useDisplay } from './display'
 import { useSortableRow } from './dnd'
 import { DueChip } from './DueChip'
 import { WhenSelect } from './WhenSelect'
+import { levelClass, TierLine, useTiersMenu } from './Tiers'
 import { isMonthOnly, whenLabel } from '../core'
 import { NoteDialog, useClickOrDouble } from './NoteDialog'
 import { useHabitEnd } from './EndedHabits'
@@ -229,12 +230,31 @@ export function HabitRow({ view, data, store, now }: { view: HabitView; data: Pl
   const when = whenLabel(habit)
   // 卒業・お休みにする／完全に消す（と、その小窓）
   const end = useHabitEnd(habit, data, apply)
+  // 3 段階（低・中・上）。「その日」で出している前・次の期間の分は、その期間のチェックの段階
+  const tiers = useTiersMenu(habit, apply)
+  const levelDay = auto && dueDay ? dueDay : now
+  const title = renaming ? (
+    <InlineInput
+      initial={habit.title}
+      label="習慣の名前"
+      onDone={(title) => {
+        setRenaming(false)
+        if (title && title !== habit.title) apply({ habits: [{ ...habit, title, updatedAt: new Date().toISOString() }] })
+      }}
+    />
+  ) : (
+    <button type="button" className="pl-task-title pl-title-button" title={habit.note ? `${habit.title}（押すとメモ）` : habit.title} {...titleClicks}>
+      {project && <ProjectDot name={projectLabel(data, project)} color={project.color} />}
+      <span className="pl-title-text">{habit.title}</span>
+      {habit.note && <FileText className="pl-note-mark" aria-label="メモあり" />}
+    </button>
+  )
 
   return (
     <li
       ref={sortable.ref}
       style={sortable.style}
-      className={`pl-habit${checked ? ' pl-done' : ''}${faded ? ' pl-faded' : ''}${auto ? ' pl-habit-auto' : ''}${sortable.isDragging ? ' pl-dragging' : ''}`}
+      className={`pl-habit${checked ? ' pl-done' : ''}${habit.tiers ? ' pl-habit-tiered' : ''}${levelClass(habit, checked, levelDay)}${faded ? ' pl-faded' : ''}${auto ? ' pl-habit-auto' : ''}${sortable.isDragging ? ' pl-dragging' : ''}`}
       {...sortable.handleProps}
     >
       <button
@@ -248,21 +268,14 @@ export function HabitRow({ view, data, store, now }: { view: HabitView; data: Pl
       >
         {checked && <Check aria-hidden="true" />}
       </button>
-      {renaming ? (
-        <InlineInput
-          initial={habit.title}
-          label="習慣の名前"
-          onDone={(title) => {
-            setRenaming(false)
-            if (title && title !== habit.title) apply({ habits: [{ ...habit, title, updatedAt: new Date().toISOString() }] })
-          }}
-        />
+      {/* 3 段階の習慣は、名前の下に中身（まだ）か、低・中・上（済み）。名前の幅を狭めないように */}
+      {habit.tiers ? (
+        <div className="pl-goal-main">
+          {title}
+          <TierLine habit={habit} checked={checked} day={levelDay} apply={apply} />
+        </div>
       ) : (
-        <button type="button" className="pl-task-title pl-title-button" title={habit.note ? `${habit.title}（押すとメモ）` : habit.title} {...titleClicks}>
-          {project && <ProjectDot name={projectLabel(data, project)} color={project.color} />}
-          <span className="pl-title-text">{habit.title}</span>
-          {habit.note && <FileText className="pl-note-mark" aria-label="メモあり" />}
-        </button>
+        title
       )}
       {dayEditing ? (
         <WhenSelect
@@ -304,6 +317,7 @@ export function HabitRow({ view, data, store, now }: { view: HabitView; data: Pl
           { label: '名前を変える', onSelect: () => setRenaming(true) },
           { label: habit.note ? 'メモを見る' : 'メモを書く', onSelect: () => setNoteOpen(true) },
           ...(habit.period !== 'day' ? [{ label: when ? `${WHEN_NAME[habit.period]}を変える（${when}）` : `${WHEN_NAME[habit.period]}を決める`, onSelect: () => setDayEditing(true) }] : []),
+          tiers.item,
           { label: 'やることに移す（1 回で終わるもの）', onSelect: () => apply(habitToTask(data, habit, now)) },
           end.items[0],
           'separator',
@@ -311,6 +325,7 @@ export function HabitRow({ view, data, store, now }: { view: HabitView; data: Pl
         ]}
       />
       {end.dialogs}
+      {tiers.dialog}
       <NoteDialog
         open={noteOpen}
         title={habit.title}

@@ -1,6 +1,6 @@
 import { addDays, dayKey, periodKey } from './period'
 import { effectiveHorizon, HABIT_HISTORY_LIMIT } from './logic'
-import type { Habit, Horizon, PlannerData, Project, Task } from './types'
+import type { Habit, HabitLevel, Horizon, PlannerData, Project, Task } from './types'
 
 /**
  * 振り返り（日ごとに、やったこと・できた習慣を見る）の計算。
@@ -24,6 +24,23 @@ export function habitDoneOn(habit: Habit, day: Date): boolean {
     if (periodKey(habit.period, new Date(y, m - 1, dd)) === key) return true
   }
   return false
+}
+
+/**
+ * その日を含む期間に、どこまでできたか（1 低・2 中・3 上。毎週・毎月などは、その期間でいちばん上のもの）。
+ * 段階の記録が無い（段階を付ける前のチェック・段階を付けていない習慣・できていない）ときは undefined
+ */
+export function habitLevelOn(habit: Habit, day: Date): HabitLevel | undefined {
+  const levels = habit.levels
+  if (!levels) return undefined
+  if (habit.period === 'day') return levels[dayKey(day)]
+  const key = periodKey(habit.period, day)
+  let best: HabitLevel | undefined
+  for (const [d, level] of Object.entries(levels)) {
+    const [y, m, dd] = d.split('-').map(Number)
+    if (periodKey(habit.period, new Date(y, m - 1, dd)) === key && (!best || level > best)) best = level
+  }
+  return best
 }
 
 /** 日時（ISO）を日付（YYYY-MM-DD）に。読めなければ undefined */

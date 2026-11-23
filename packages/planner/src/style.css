@@ -16,6 +16,10 @@
   --pl-danger: #dc2626;
   --pl-warning: #b45309;
   --pl-ok: #0f766e;
+  /* 習慣の 3 段階: 上（濃紫・こきむらさき）と、低（薄い緑） */
+  --pl-tier-top: #4a2a6e;
+  --pl-tier-top-text: #fff;
+  --pl-tier-low: color-mix(in srgb, var(--pl-accent) 35%, var(--pl-panel));
   /* 上に固定の見出しがあるページでは、その高さ（帯が見出しの下にくっつく） */
   --pl-sticky-top: 0px;
   color: var(--pl-text);
@@ -33,6 +37,9 @@
   --pl-danger: #f87171;
   --pl-warning: #fbbf24;
   --pl-ok: #2dd4bf;
+  --pl-tier-top: #a07cd0;
+  --pl-tier-top-text: #1b1026;
+  --pl-tier-low: color-mix(in srgb, var(--pl-accent) 45%, var(--pl-panel));
 }
 @media (prefers-color-scheme: dark) {
   :where(.planner[data-theme='system']) {
@@ -48,6 +55,9 @@
     --pl-danger: #f87171;
     --pl-warning: #fbbf24;
     --pl-ok: #2dd4bf;
+    --pl-tier-top: #a07cd0;
+    --pl-tier-top-text: #1b1026;
+    --pl-tier-low: color-mix(in srgb, var(--pl-accent) 45%, var(--pl-panel));
   }
 }
 .planner .pl-icon-button {
@@ -1939,4 +1949,118 @@
   background: transparent;
   box-shadow: inset 0 0 0 1px var(--pl-ok);
   color: var(--pl-ok);
+}
+/* ─── 習慣の 3 段階（低・中・上） ─── */
+/* 名前の下に、もう 1 行（中身か、低・中・上）が出るので、チェックは上にそろえる */
+.planner .pl-habit-tiered {
+  align-items: flex-start;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.planner .pl-habit-tiered > .pl-square {
+  margin-top: 1px;
+}
+.planner .pl-habit-tiered .pl-goal-main {
+  gap: 2px;
+}
+.planner .pl-tier-text {
+  color: var(--pl-muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.planner .pl-tier-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.planner .pl-tier-pick {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--pl-border);
+  border-radius: 999px;
+}
+.planner .pl-tier-button {
+  min-width: 28px;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 0;
+  background: var(--pl-panel);
+  color: var(--pl-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.planner .pl-tier-button + .pl-tier-button {
+  border-left: 1px solid var(--pl-border);
+}
+.planner .pl-tier-button:hover {
+  color: var(--pl-text);
+}
+.planner .pl-tier-button:focus-visible {
+  outline: 2px solid var(--pl-accent);
+  outline-offset: -2px;
+}
+.planner .pl-tier-button-1[aria-checked='true'] {
+  background: var(--pl-tier-low);
+  color: var(--pl-text);
+  font-weight: 600;
+}
+.planner .pl-tier-button-2[aria-checked='true'] {
+  background: var(--pl-accent);
+  color: var(--pl-accent-text);
+  font-weight: 600;
+}
+.planner .pl-tier-button-3[aria-checked='true'] {
+  background: var(--pl-tier-top);
+  color: var(--pl-tier-top-text);
+  font-weight: 600;
+}
+/* チェックの色: 低は薄い緑、上は濃紫（中と、段階の記録が無いものは、いつもの緑） */
+.planner .pl-done.pl-lv-1 > .pl-square {
+  border-color: var(--pl-tier-low);
+  background: var(--pl-tier-low);
+  color: var(--pl-text);
+}
+.planner .pl-done.pl-lv-3 > .pl-square {
+  border-color: var(--pl-tier-top);
+  background: var(--pl-tier-top);
+  color: var(--pl-tier-top-text);
+}
+/* 3 段階の小窓 */
+.planner .pl-tier-fields {
+  display: grid;
+  gap: 8px;
+}
+.planner .pl-tier-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.planner .pl-tier-field .pl-input {
+  flex: 1;
+  min-width: 0;
+}
+.planner .pl-tier-field-name {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.planner .pl-tier-field-1 .pl-tier-field-name {
+  background: var(--pl-tier-low);
+  color: var(--pl-text);
+}
+.planner .pl-tier-field-2 .pl-tier-field-name {
+  background: var(--pl-accent);
+  color: var(--pl-accent-text);
+}
+.planner .pl-tier-field-3 .pl-tier-field-name {
+  background: var(--pl-tier-top);
+  color: var(--pl-tier-top-text);
 }

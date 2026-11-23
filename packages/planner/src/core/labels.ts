@@ -1,4 +1,4 @@
-import type { BoardHorizon, Horizon, Period, Priority } from './types'
+import type { BoardHorizon, HabitLevel, HabitTiers, Horizon, Period, Priority } from './types'
 import type { PlaceTarget } from './logic'
 
 export const HORIZON_NAME: Record<BoardHorizon, string> = {
@@ -55,4 +55,18 @@ export const PERIOD_NAME: Record<Period, string> = {
   week: '毎週',
   month: '毎月',
   year: '毎年',
+}
+
+/** 3 段階の名前 */
+export const LEVEL_NAME: Record<HabitLevel, string> = { 1: '低', 2: '中', 3: '上' }
+
+/** 3 段階の、中身（HabitTiers）の項目 */
+export const LEVEL_TIER: Record<HabitLevel, keyof HabitTiers> = { 1: 'low', 2: 'mid', 3: 'top' }
+
+/** 3 段階の中身を 1 行に（「低 3分・中 10分・上 30分」。中身の無い段階は出さない） */
+export function tiersLabel(tiers: HabitTiers): string {
+  return ([1, 2, 3] as const)
+    .filter((l) => tiers[LEVEL_TIER[l]])
+    .map((l) => `${LEVEL_NAME[l]} ${tiers[LEVEL_TIER[l]]}`)
+    .join('・')
 }

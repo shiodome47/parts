@@ -40,6 +40,7 @@ import { WhenSelect } from '../ui/WhenSelect'
 import { EndedHabits, useHabitEnd } from '../ui/EndedHabits'
 import { BreakdownChip, BreakdownOf, SplitGoalDialog, jumpToProject } from './Breakdown'
 import { CountControl, useCountMenu } from '../ui/Count'
+import { levelClass, TierLine, useTiersMenu } from '../ui/Tiers'
 
 const PERIODS: Period[] = ['day', 'week', 'month', 'year']
 
@@ -548,11 +549,27 @@ function RoutineRow({ r, data, apply, now }: { r: Habit; data: PlannerData; appl
   const today = useContext(TodayContext)?.habits.has(r.id)
   // 行をつかんでドラッグで並べ替える（マウスは少し動かすと、指は長押しで）
   const row = useSortableRow(r.id)
+  // 3 段階（低・中・上）
+  const tiers = useTiersMenu(r, apply)
+  const title = (
+    <NoteTitle
+      title={r.title}
+      note={r.note}
+      wrap
+      renameLabel="ルーチン目標の名前"
+      menuOpener={(o) => Object.assign(opener, o)}
+      onRename={(title) => apply({ habits: [{ ...r, title, updatedAt: t() }] })}
+      onSaveNote={(note) => {
+        const { note: _n, ...rest } = r
+        apply({ habits: [{ ...rest, ...(note ? { note } : {}), updatedAt: t() }] })
+      }}
+    />
+  )
   return (
     <li
       ref={row.ref}
       style={row.style}
-      className={`pl-habit${checked ? ' pl-done' : ''}${today ? ' pl-today' : ''}${row.isDragging ? ' pl-dragging' : ''}`}
+      className={`pl-habit${checked ? ' pl-done' : ''}${r.tiers ? ' pl-habit-tiered' : ''}${levelClass(r, checked, now)}${today ? ' pl-today' : ''}${row.isDragging ? ' pl-dragging' : ''}`}
       {...row.handleProps}
     >
       <button
@@ -566,18 +583,15 @@ function RoutineRow({ r, data, apply, now }: { r: Habit; data: PlannerData; appl
       >
         {checked && <Check aria-hidden="true" />}
       </button>
-      <NoteTitle
-        title={r.title}
-        note={r.note}
-        wrap
-        renameLabel="ルーチン目標の名前"
-        menuOpener={(o) => Object.assign(opener, o)}
-        onRename={(title) => apply({ habits: [{ ...r, title, updatedAt: t() }] })}
-        onSaveNote={(note) => {
-          const { note: _n, ...rest } = r
-          apply({ habits: [{ ...rest, ...(note ? { note } : {}), updatedAt: t() }] })
-        }}
-      />
+      {/* 3 段階のものは、名前の下に中身（まだ）か、低・中・上（済み） */}
+      {r.tiers ? (
+        <div className="pl-goal-main">
+          {title}
+          <TierLine habit={r} checked={checked} day={now} apply={apply} />
+        </div>
+      ) : (
+        title
+      )}
       <select
         className="pl-select"
         value={r.period}
@@ -597,12 +611,14 @@ function RoutineRow({ r, data, apply, now }: { r: Habit; data: PlannerData; appl
         items={[
           { label: '名前を変える', onSelect: () => opener.rename?.() },
           { label: r.note ? 'メモを見る' : 'メモを書く', onSelect: () => opener.note?.() },
+          tiers.item,
           end.items[0],
           'separator',
           end.items[1],
         ]}
       />
       {end.dialogs}
+      {tiers.dialog}
     </li>
   )
 }

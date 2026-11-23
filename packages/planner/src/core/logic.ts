@@ -1,6 +1,6 @@
 import { addDays, dayKey, daysUntil, HORIZON_HABIT_PERIOD, HORIZON_PERIOD, inSamePeriod, monthDayDate, periodHorizon, periodKey, weekStart } from './period'
 import { autoDue, habitDoneInPeriod, whenDate } from './when'
-import { HORIZONS, PRIORITIES, type BoardHorizon, type Habit, type HabitBreak, type HabitEnd, type Horizon, type MonthDay, type Period, type PlannerData, type Priority, type Project, type Task } from './types'
+import { HORIZONS, PRIORITIES, type BoardHorizon, type Habit, type HabitBreak, type HabitEnd, type HabitLevel, type HabitTiers, type Horizon, type MonthDay, type Period, type PlannerData, type Priority, type Project, type Task } from './types'
 
 /**
  * 時間軸ボードの決まりごと（画面に依存しない計算）。
@@ -552,17 +552,67 @@ export function toggleHabit(habit: Habit, now: Date): Habit {
   if (inSamePeriod(habit.period, habit.checkedAt, now)) {
     // 外す: 今の期間の記録も消す（振り返りから付け直した日も。時間軸と振り返りが食い違わないように）
     const key = periodKey(habit.period, now)
-    return { ...rest, history: history.filter((d) => periodKey(habit.period, noonOf(d)) !== key), updatedAt: t }
+    return withLevelsKept({ ...rest, history: history.filter((d) => periodKey(habit.period, noonOf(d)) !== key), updatedAt: t })
   }
-  return { ...rest, checkedAt: t, ...withHistoryDay(habit, dayKey(now)), updatedAt: t }
+  return withLevelsKept({ ...rest, checkedAt: t, ...withHistoryDay(habit, dayKey(now)), updatedAt: t })
 }
 
-/** 記録に日を足す（上限を超えたら古い日から消し、残っている一番古い日を historyFrom に覚える） */
-function withHistoryDay(habit: Habit, key: string): Pick<Habit, 'history' | 'historyFrom'> {
-  const all = [...new Set([...(habit.history ?? []), key])].sort()
-  if (all.length <= HABIT_HISTORY_LIMIT) return { history: all, ...(habit.historyFrom ? { historyFrom: habit.historyFrom } : {}) }
+/**
+ * 記録に日を足す（上限を超えたら古い日から消し、残っている一番古い日を historyFrom に覚える）。
+ * 3 段階を付けた習慣は、新しくチェックした日を「低」にする（中・上は、あとで上げる）
+ */
+function withHistoryDay(habit: Habit, key: string): Pick<Habit, 'history' | 'historyFrom' | 'levels'> {
+  const before = habit.history ?? []
+  const all = [...new Set([...before, key])].sort()
+  const levels = habit.tiers && !before.includes(key) && !habit.levels?.[key] ? { levels: { ...habit.levels, [key]: 1 as const } } : {}
+  if (all.length <= HABIT_HISTORY_LIMIT) return { history: all, ...(habit.historyFrom ? { historyFrom: habit.historyFrom } : {}), ...levels }
   const kept = all.slice(-HABIT_HISTORY_LIMIT)
-  return { history: kept, historyFrom: habit.historyFrom && habit.historyFrom > kept[0] ? habit.historyFrom : kept[0] }
+  return { history: kept, historyFrom: habit.historyFrom && habit.historyFrom > kept[0] ? habit.historyFrom : kept[0], ...levels }
+}
+
+/** 段階の記録（levels）を、記録（history）に残っている日だけにする（1 つも無ければ消す） */
+function withLevelsKept(habit: Habit): Habit {
+  if (!habit.levels) return habit
+  const days = new Set(habit.history ?? [])
+  const kept = Object.entries(habit.levels).filter(([d]) => days.has(d))
+  const { levels: _l, ...rest } = habit
+  return kept.length ? { ...rest, levels: Object.fromEntries(kept) as Record<string, HabitLevel> } : rest
+}
+
+/** 3 段階の中身 1 つの長さの上限（文字） */
+export const TIER_TEXT_LIMIT = 30
+
+/**
+ * 習慣に 3 段階（低・中・上）を付ける・中身を変える。undefined なら 3 段階をやめる
+ * （それまでの段階の記録は残す。振り返りの色はそのまま）。中身はどれも空でもよい
+ */
+export function setHabitTiers(habit: Habit, tiers: HabitTiers | undefined, now: Date): Habit {
+  const { tiers: _t, ...rest } = habit
+  if (!tiers) return { ...rest, updatedAt: iso(now) }
+  const clean: HabitTiers = {}
+  for (const k of ['low', 'mid', 'top'] as const) {
+    const v = tiers[k]?.trim().slice(0, TIER_TEXT_LIMIT)
+    if (v) clean[k] = v
+  }
+  return { ...rest, tiers: clean, updatedAt: iso(now) }
+}
+
+/** その日を含む期間に、チェックした日（その日にチェックがあればその日、無ければ期間の中でいちばん新しい日） */
+export function checkDayIn(habit: Habit, day: Date): string | undefined {
+  const history = habit.history ?? []
+  if (history.includes(dayKey(day))) return dayKey(day)
+  const key = periodKey(habit.period, day)
+  return history.filter((d) => periodKey(habit.period, noonOf(d)) === key).sort().pop()
+}
+
+/**
+ * どこまでできたか（1 低・2 中・3 上）を決める。その日を含む期間のチェックに付ける
+ * （時間軸・プロジェクトでは今日、振り返りではその日）。チェックが無ければ変えない
+ */
+export function setHabitLevel(habit: Habit, day: Date, level: HabitLevel, now: Date): Habit {
+  const key = checkDayIn(habit, day)
+  if (!key || habit.levels?.[key] === level) return habit
+  return { ...habit, levels: { ...habit.levels, [key]: level }, updatedAt: iso(now) }
 }
 
 /** 習慣の記録を残す日数の上限 */
@@ -1046,15 +1096,15 @@ export function toggleHabitOnDay(habit: Habit, day: Date, now: Date): Habit {
   const current = periodKey(habit.period, day) === periodKey(habit.period, now)
   if (history.includes(key)) {
     const next = history.filter((d) => d !== key)
-    if (!habit.checkedAt || dayKey(new Date(habit.checkedAt)) !== key) return { ...habit, history: next, updatedAt: t }
+    if (!habit.checkedAt || dayKey(new Date(habit.checkedAt)) !== key) return withLevelsKept({ ...habit, history: next, updatedAt: t })
     // 今のチェックの日を外した: 同じ期間にほかのチェックの日があれば、そちらを今のチェックにする（時間軸と振り返りが食い違わないように）
     const { checkedAt: _c, ...rest } = habit
     const other = next.filter((d) => periodKey(habit.period, noonOf(d)) === periodKey(habit.period, day)).pop()
-    return { ...rest, ...(other ? { checkedAt: iso(noonOf(other)) } : {}), history: next, updatedAt: t }
+    return withLevelsKept({ ...rest, ...(other ? { checkedAt: iso(noonOf(other)) } : {}), history: next, updatedAt: t })
   }
   const at = key === dayKey(now) ? now : new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12)
   const check = current && !inSamePeriod(habit.period, habit.checkedAt, now)
-  return { ...habit, ...(check ? { checkedAt: iso(at) } : {}), ...withHistoryDay(habit, key), updatedAt: t }
+  return withLevelsKept({ ...habit, ...(check ? { checkedAt: iso(at) } : {}), ...withHistoryDay(habit, key), updatedAt: t })
 }
 
 /** やることを、その日に終えたことにする（振り返りから付け直す。今日なら今の時刻、過ぎた日ならその日の正午） */
