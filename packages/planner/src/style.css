@@ -1781,3 +1781,155 @@
 .planner .pl-count-stop {
   margin-right: auto;
 }
+/* ─── 時間軸: プロジェクトの習慣をまとめた 1 行（▸ ● ヨガ　あと 8） ─── */
+.planner .pl-habit-group {
+  border-radius: 8px;
+}
+.planner .pl-habit-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 34px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pl-text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.planner .pl-habit-group-toggle:hover {
+  background: var(--pl-panel-2);
+}
+.planner .pl-habit-group-toggle:focus-visible {
+  outline: 2px solid var(--pl-accent);
+  outline-offset: -2px;
+}
+.planner .pl-habit-group-toggle .pl-title-text {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+.planner .pl-habit-group-chevron {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--pl-muted);
+  transition: transform 0.15s;
+}
+.planner .pl-habit-group-open .pl-habit-group-chevron {
+  transform: rotate(90deg);
+}
+.planner .pl-habit-group-left {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--pl-panel-2);
+  color: var(--pl-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.planner .pl-habit-group-left.pl-count-full {
+  color: var(--pl-ok);
+}
+.planner .pl-habit-group.pl-done .pl-habit-group-toggle .pl-title-text {
+  color: var(--pl-muted);
+}
+/* 開いた中: 少し下げて、プロジェクトの丸は見出しにあるので出さない */
+.planner .pl-habit-group-items {
+  margin-left: 14px;
+  padding-left: 6px;
+  border-left: 2px solid var(--pl-border);
+}
+.planner .pl-habit-group-items .pl-pdot {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .planner .pl-habit-group-chevron {
+    transition: none;
+  }
+}
+/* ─── プロジェクト: 「今日」を目立たせる ─── */
+.planner .pl-projects-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 12px 16px 0;
+}
+.planner .pl-today-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 14px;
+  border: 1px solid var(--pl-border);
+  border-radius: 999px;
+  background: var(--pl-panel);
+  color: var(--pl-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.planner .pl-today-toggle svg {
+  width: 15px;
+  height: 15px;
+}
+.planner .pl-today-toggle:hover {
+  border-color: var(--pl-accent);
+}
+.planner .pl-today-toggle:focus-visible {
+  outline: 2px solid var(--pl-accent);
+  outline-offset: 1px;
+}
+.planner .pl-today-toggle[aria-pressed='true'] {
+  border-color: var(--pl-accent);
+  background: var(--pl-accent);
+  color: var(--pl-accent-text);
+}
+.planner .pl-today-toggle-left {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.planner .pl-today-hint {
+  margin: 0;
+}
+/* 今日のもの: 色の帯。ほか（今日でない目標・ルーチン目標・たたんだ一覧）は薄く */
+.planner .pl-projects-today .pl-today {
+  background: color-mix(in srgb, var(--pl-accent) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--pl-accent);
+}
+.planner .pl-projects-today .pl-today.pl-done {
+  background: transparent;
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--pl-accent) 35%, transparent);
+}
+.planner .pl-projects-today .pl-goal:not(.pl-today):not(.pl-goal-add),
+.planner .pl-projects-today .pl-habit:not(.pl-today),
+.planner .pl-projects-today .pl-ended {
+  opacity: 0.35;
+}
+/* 今日のものが 1 つも無いカード・中のプロジェクト */
+.planner .pl-projects-today .pl-today-none {
+  opacity: 0.55;
+}
+/* カードの見出しの「今日 あと 4」 */
+.planner .pl-today-badge {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--pl-accent);
+  color: var(--pl-accent-text);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.planner .pl-today-badge-done {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--pl-ok);
+  color: var(--pl-ok);
+}

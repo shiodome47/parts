@@ -1,4 +1,4 @@
-import { Maximize2, Minimize2 } from 'lucide-react'
+import { ChevronRight, Maximize2, Minimize2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { safeLocalStore } from '../ui/storage'
 import { periodLabel } from '../core'
@@ -9,12 +9,37 @@ import { verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { SortableList } from '../ui/dnd'
 import { PRIORITIES, type PlannerData, type Priority } from '../core'
 import type { PlannerStore } from '../ui/types'
-import { AddInput, HabitRow, TaskRow } from '../ui/Rows'
+import { AddInput, HabitRow, ProjectDot, TaskRow } from '../ui/Rows'
+import { groupHabits, type HabitGroup } from './habitGroups'
 import { JumpBar, scrollToElement } from '../ui/JumpBar'
 import { EndedHabits } from '../ui/EndedHabits'
 
 /** 広げている列（この端末だけに覚えておく） */
 const WIDE_KEY = 'planner:wideColumn'
+/** 開いている、プロジェクトごとの習慣のまとまり（「today:プロジェクトの id」の一覧。この端末だけに覚えておく） */
+const GROUPS_KEY = 'planner:openHabitGroups'
+
+function readOpenGroups(): Set<string> {
+  try {
+    const list: unknown = JSON.parse(safeLocalStore.get(GROUPS_KEY) ?? '[]')
+    return new Set(Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : [])
+  } catch {
+    return new Set()
+  }
+}
+
+/** 開いているまとまりと、開く・閉じる（ほかの列の分を消さないよう、覚えている値を読み直してから書く） */
+function useOpenGroups(): [Set<string>, (key: string) => void] {
+  const [open, setOpen] = useState(readOpenGroups)
+  const toggle = (key: string) => {
+    const next = readOpenGroups()
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
+    safeLocalStore.set(GROUPS_KEY, JSON.stringify([...next]))
+    setOpen(next)
+  }
+  return [open, toggle]
+}
 
 /**
  * 時間軸ボード。今日・今週・数か月・今年・一生を横に並べる（スマホでは横にめくる）。
@@ -106,8 +131,14 @@ function Column({
   const [tomorrowPriority, setTomorrowPriority] = useState<Priority>('B')
   const h = col.horizon
   const doneHabits = col.habits.filter((x) => x.checked).length
-  // 並べ替えるのは、この列の期間の習慣だけ（「その日」で自動で出している毎月の習慣は除く）
-  const ownHabitIds = col.habits.filter((v) => !v.auto).map((v) => v.habit.id)
+  // 同じプロジェクトの習慣が 2 つ以上あれば、1 行（「ヨガ あと 8」）にまとめてたたむ
+  const [openGroups, toggleGroup] = useOpenGroups()
+  const { single, groups } = groupHabits(col.habits, data)
+  const groupKey = (g: HabitGroup) => `${h}:${g.project.id}`
+  // 並べ替えるのは、この列の期間の習慣で、見えているものだけ（「その日」で自動で出している毎月の習慣は除く）。画面の並び順
+  const ownHabitIds = [...single, ...groups.flatMap((g) => (openGroups.has(groupKey(g)) ? g.views : []))]
+    .filter((v) => !v.auto)
+    .map((v) => v.habit.id)
   const openTasks = col.tasks.filter((x) => !x.done && !x.faded).length
 
   return (
@@ -156,8 +187,19 @@ function Column({
             onMove={(a, o) => void store.apply(reorderHabits(data, ownHabitIds, a, o, new Date()))}
           >
             <ul className="pl-list">
-              {col.habits.map((v) => (
+              {single.map((v) => (
                 <HabitRow key={v.auto ? `auto-${v.habit.id}` : v.habit.id} view={v} data={data} store={store} now={now} />
+              ))}
+              {groups.map((g) => (
+                <HabitGroupRow
+                  key={g.project.id}
+                  group={g}
+                  open={openGroups.has(groupKey(g))}
+                  onToggle={() => toggleGroup(groupKey(g))}
+                  data={data}
+                  store={store}
+                  now={now}
+                />
               ))}
             </ul>
           </SortableList>
@@ -218,6 +260,50 @@ function Column({
         </div>
       )}
     </section>
+  )
+}
+
+/**
+ * プロジェクトの習慣をまとめた 1 行（▸ ● ヨガ　あと 8）。押すと、その場で開いてチェックもできる
+ */
+function HabitGroupRow({
+  group,
+  open,
+  onToggle,
+  data,
+  store,
+  now,
+}: {
+  group: HabitGroup
+  open: boolean
+  onToggle: () => void
+  data: PlannerData
+  store: PlannerStore
+  now: Date
+}) {
+  const { project, label, views, left } = group
+  return (
+    <li className={`pl-habit-group${open ? ' pl-habit-group-open' : ''}${left === 0 ? ' pl-done' : ''}`}>
+      <button
+        type="button"
+        className="pl-habit-group-toggle"
+        aria-expanded={open}
+        aria-label={`「${label}」の習慣 ${views.length} 個（${left ? `あと ${left}` : '全部済み'}）`}
+        onClick={onToggle}
+      >
+        <ChevronRight className="pl-habit-group-chevron" aria-hidden="true" />
+        <ProjectDot name={label} color={project.color} />
+        <span className="pl-title-text">{label}</span>
+        <span className={`pl-habit-group-left${left === 0 ? ' pl-count-full' : ''}`}>{left ? `あと ${left}` : '✓ 済み'}</span>
+      </button>
+      {open && (
+        <ul className="pl-list pl-habit-group-items">
+          {views.map((v) => (
+            <HabitRow key={v.habit.id} view={v} data={data} store={store} now={now} />
+          ))}
+        </ul>
+      )}
+    </li>
   )
 }
 

@@ -290,3 +290,43 @@ describe('回数の目標（30/100 回 ＋1）', () => {
     expect(within(card).getByRole('button', { name: '「151-200 リーディング」を 1 回足す（今 30/100 回）' })).toBeTruthy()
   })
 })
+
+describe('今日の見え方（習慣をまとめる・プロジェクトで今日を目立たせる）', () => {
+  afterEach(() => localStorage.clear())
+
+  /** ヨガに毎日の習慣 2 つ（1 つ済み）、期日が今日の目標 1 つ。自治会には今日のものが無い */
+  function yoga(): PlannerData {
+    let d = sample()
+    const p = newProject(d, { name: 'ヨガ', color: 'yellow' }, NOW)
+    d = applyChanges(d, { projects: [p] })
+    d = applyChanges(d, { habits: [newHabit(d, { title: '瞑想30分', period: 'day', projectId: p.id }, NOW)] })
+    d = applyChanges(d, { habits: [newHabit(d, { title: 'トラータカ1分', period: 'day', projectId: p.id }, NOW)] })
+    d = applyChanges(d, { habits: [toggleHabit(d.habits.find((h) => h.title === 'トラータカ1分')!, NOW)] })
+    d = applyChanges(d, { tasks: [newTask(d, { title: 'ヨガ教室の予約', horizon: 'pool', priority: 'C', projectId: p.id, due: '2026-11-19' }, NOW)] })
+    return d
+  }
+
+  it('時間軸: 同じプロジェクトの習慣は「ヨガ あと 1」の 1 行。押すと開く', () => {
+    render(<Timeline data={yoga()} now={NOW} onChange={() => {}} />)
+    const toggle = screen.getByRole('button', { name: '「ヨガ」の習慣 2 個（あと 1）' })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByText('瞑想30分')).toBeNull()
+    // プロジェクトの無い習慣は、今までどおり
+    expect(screen.getByText('朝の散歩')).toBeTruthy()
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('checkbox', { name: '「瞑想30分」をチェック' })).toBeTruthy()
+  })
+
+  it('プロジェクト: 「今日」を押すと、今日のものに色の帯、カードに「今日 あと 2」', () => {
+    render(<Projects data={yoga()} now={NOW} onChange={() => {}} />)
+    const card = screen.getByRole('region', { name: 'ヨガ' })
+    expect(within(card).queryByText(/今日 あと/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /今日/ }))
+    expect(within(card).getByText('今日 あと 2')).toBeTruthy()
+    expect(within(card).getByText('瞑想30分').closest('li')!.classList.contains('pl-today')).toBe(true)
+    expect(within(card).getByText('ヨガ教室の予約').closest('li')!.classList.contains('pl-today')).toBe(true)
+    // 今日のものが無いカード（自治会の目標は今週）は、薄く
+    expect(screen.getByRole('region', { name: '自治会' }).classList.contains('pl-today-none')).toBe(true)
+  })
+})

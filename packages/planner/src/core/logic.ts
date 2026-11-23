@@ -73,9 +73,12 @@ export function followsDue(task: Task): boolean {
   return !!task.due && !task.parentId && !task.habitId
 }
 
-/** プロジェクトの期日目標か（下ろした先のコピーではないもの） */
+/**
+ * プロジェクトの期日目標か（下ろした先のコピーや、ルーチン目標（習慣）から下ろしたものではないもの）。
+ * 習慣から下ろしたものも、習慣のプロジェクトを持つので、habitId でも除く
+ */
 export function isProjectGoal(task: Task): boolean {
-  return !!task.projectId && !task.parentId
+  return !!task.projectId && !task.parentId && !task.habitId
 }
 
 /**
@@ -119,6 +122,36 @@ function doneStillVisible(task: Task, now: Date): boolean {
 export function isVisible(task: Task, now: Date): boolean {
   if (isExpired(task, now)) return false
   return doneStillVisible(task, now)
+}
+
+/** 今日のもの（時間軸の今日の列に出ている習慣・やること）。値は、済んだか */
+export interface TodayMarks {
+  habits: Map<string, boolean>
+  tasks: Map<string, boolean>
+}
+
+/**
+ * 今日のもの。プロジェクトの画面で「今日」を目立たせるのに使う。
+ * - 習慣: 今日の列の習慣（毎月の「その日」で出ているものも）。今日に下ろしたやることは、元の習慣に数える
+ * - やること: 今日の列のやること（明日の欄・ほかの列に下ろして薄くなっているものは除く）。下ろした先は、元の目標に数える
+ */
+export function todayMarks(data: PlannerData, now: Date): TodayMarks {
+  const today = buildColumns(data, now).find((c) => c.horizon === 'today')!
+  const byId = new Map(data.tasks.map((t) => [t.id, t]))
+  const habits = new Map<string, boolean>()
+  const tasks = new Map<string, boolean>()
+  for (const v of today.habits) habits.set(v.habit.id, v.checked)
+  for (const v of today.tasks) {
+    if (v.faded) continue
+    if (v.task.habitId) {
+      habits.set(v.task.habitId, v.done || !!habits.get(v.task.habitId))
+      continue
+    }
+    let root = v.task
+    while (root.parentId && byId.get(root.parentId)) root = byId.get(root.parentId)!
+    tasks.set(root.id, v.done || !!root.doneAt)
+  }
+  return { habits, tasks }
 }
 
 /** その項目から下ろして、今も生きている項目（無ければ undefined） */
