@@ -1,9 +1,10 @@
-import { Check, GripVertical, Plus } from 'lucide-react'
+import { Check, GripVertical, Plus, Sun } from 'lucide-react'
 import { verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { SortableList, useLampSensors, useSortableRow } from '../ui/dnd'
 import { CardBoard, type CardBoardCardState } from 'linkshelf'
 import { changedProjects, projectCards, projectsInReadingOrder } from './projectCards'
-import { useState } from 'react'
+import { createContext, useContext, useMemo, useState } from 'react'
+import { safeLocalStore } from '../ui/storage'
 import { inSamePeriod } from '../core'
 import { PERIOD_NAME } from '../core'
 import {
@@ -21,8 +22,10 @@ import {
   reorderProjects,
   toggleDone,
   toggleHabit,
+  todayMarks,
   topProjects,
   unlinkGoal,
+  type TodayMarks,
 } from '../core'
 import { endedHabits, type Habit, type PlannerData, type Period, type Project, type Task } from '../core'
 import { PROJECT_COLORS } from './colors'
@@ -45,6 +48,45 @@ const CARD_GAP = 10
 
 type Apply = (c: Parameters<PlannerStore['apply']>[0]) => void
 
+/** 「今日」を目立たせているか（この端末だけに覚えておく） */
+const TODAY_KEY = 'planner:projectsToday'
+/** 「今日」を目立たせているときの、今日のもの（目立たせていなければ null） */
+const TodayContext = createContext<TodayMarks | null>(null)
+
+/** そのプロジェクト（ids）の、今日のものの数と、まだの数 */
+function todayCount(data: PlannerData, marks: TodayMarks, ids: Set<string>): { total: number; left: number } {
+  let total = 0
+  let left = 0
+  for (const t of data.tasks) {
+    const done = t.projectId && ids.has(t.projectId) ? marks.tasks.get(t.id) : undefined
+    if (done === undefined) continue
+    total++
+    if (!done) left++
+  }
+  for (const h of data.habits) {
+    const done = h.projectId && ids.has(h.projectId) ? marks.habits.get(h.id) : undefined
+    if (done === undefined) continue
+    total++
+    if (!done) left++
+  }
+  return { total, left }
+}
+
+/** カードの見出しに出す「今日 あと 4」（目立たせていないとき・今日のものが無いときは出さない） */
+function TodayBadge({ data, ids }: { data: PlannerData; ids: string[] }) {
+  const marks = useContext(TodayContext)
+  if (!marks) return null
+  const { total, left } = todayCount(data, marks, new Set(ids))
+  if (total === 0) return null
+  return <span className={`pl-today-badge${left === 0 ? ' pl-today-badge-done' : ''}`}>{left ? `今日 あと ${left}` : '今日 ✓'}</span>
+}
+
+/** 今日のものが 1 つも無いカードか（目立たせているときだけ。薄く出す） */
+function useTodayNone(data: PlannerData, ids: string[]): boolean {
+  const marks = useContext(TodayContext)
+  return !!marks && todayCount(data, marks, new Set(ids)).total === 0
+}
+
 /**
  * プロジェクト。1 枚のカードが 1 つのプロジェクト（または「英語」「自治会」のような続けていくテーマ）で、
  * 「期日目標」（期日つきのやること。期日から自動で時間軸の列に出る。優先度は時間軸で変える）と
@@ -55,6 +97,17 @@ export function ProjectsPage({ data, store, now }: { data: PlannerData; store: P
   const [adding, setAdding] = useState(false)
   const cards = projectCards(data, topProjects(data))
   const sensors = useLampSensors()
+  // 「今日」: 時間軸の今日の列に出ているものを目立たせ、ほかを薄くする
+  const [todayOn, setTodayOn] = useState(() => safeLocalStore.get(TODAY_KEY) === '1')
+  const marks = useMemo(() => (todayOn ? todayMarks(data, now) : null), [todayOn, data, now])
+  const allLeft = marks ? todayCount(data, marks, new Set(data.projects.map((p) => p.id))).left : 0
+  const toggleToday = () => {
+    setTodayOn((on) => {
+      if (on) safeLocalStore.remove(TODAY_KEY)
+      else safeLocalStore.set(TODAY_KEY, '1')
+      return !on
+    })
+  }
   const addCard = adding ? (
     <section className="pl-project pl-project-new">
       <AddInput
@@ -83,12 +136,27 @@ export function ProjectsPage({ data, store, now }: { data: PlannerData; store: P
         items={projectsInReadingOrder(cards).map((p) => ({ id: p.id, label: p.name, color: p.color }))}
         onJump={(id) => scrollToElement(document.querySelector(`[data-project="${CSS.escape(id)}"]`))}
       />
+      <div className="pl-projects-tools">
+        <button
+          type="button"
+          className="pl-today-toggle"
+          aria-pressed={todayOn}
+          title={todayOn ? '目立たせるのをやめる' : '今日の列に出ているものを目立たせる'}
+          onClick={toggleToday}
+        >
+          <Sun aria-hidden="true" />
+          今日
+          {todayOn && <span className="pl-today-toggle-left">{allLeft ? `あと ${allLeft}` : '✓'}</span>}
+        </button>
+        {todayOn && <span className="pl-note pl-today-hint">今日の列に出ているものを目立たせています</span>}
+      </div>
       {/*
         左上ほど優先が高い。見出しの ⋮⋮ をつかんで並べ替える。
         並べ方とドラッグは linkshelf の <CardBoard>（棚と同じ）。カードは列ごとに上から詰める
       */}
+      <TodayContext.Provider value={marks}>
       <CardBoard
-        className="pl-projects"
+        className={todayOn ? 'pl-projects pl-projects-today' : 'pl-projects'}
         columnClassName="pl-projects-col"
         cards={cards}
         minColumnWidth={CARD_MIN}
@@ -103,6 +171,7 @@ export function ProjectsPage({ data, store, now }: { data: PlannerData; store: P
         }}
         renderCard={(card, state) => <ProjectCard project={card.project} data={data} store={store} now={now} drag={state} />}
       />
+      </TodayContext.Provider>
     </>
   )
 }
@@ -129,10 +198,12 @@ function ProjectCard({
   const children = childProjects(data, project.id)
   // ほかのテーマに入れられるのは、中にプロジェクトが無いものだけ（1 段だけ）
   const themes = children.length === 0 ? topProjects(data).filter((p) => p.id !== project.id) : []
+  const ids = [project.id, ...children.map((c) => c.id)]
+  const quiet = useTodayNone(data, ids)
 
   return (
     <section
-      className={`pl-project${drag.isDragging ? ' pl-dragging' : ''}`}
+      className={`pl-project${drag.isDragging ? ' pl-dragging' : ''}${quiet ? ' pl-today-none' : ''}`}
       aria-label={project.name}
       data-project={project.id}
     >
@@ -159,6 +230,7 @@ function ProjectCard({
         ) : (
           <h2 onDoubleClick={() => setRenaming(true)}>{project.name}</h2>
         )}
+        <TodayBadge data={data} ids={ids} />
         <Menu
           label={`「${project.name}」の操作`}
           items={[
@@ -229,11 +301,12 @@ function SubProject({ project, parent, data, apply, now }: { project: Project; p
   const [confirmDelete, setConfirmDelete] = useState(false)
   const sortable = useSortableRow(project.id, renaming)
   const otherThemes = topProjects(data).filter((p) => p.id !== parent.id)
+  const quiet = useTodayNone(data, [project.id])
   return (
     <section
       ref={sortable.ref}
       style={sortable.style}
-      className={`pl-subproject${sortable.isDragging ? ' pl-dragging' : ''}`}
+      className={`pl-subproject${sortable.isDragging ? ' pl-dragging' : ''}${quiet ? ' pl-today-none' : ''}`}
       aria-label={`${parent.name}・${project.name}`}
       data-project={project.id}
     >
@@ -261,6 +334,7 @@ function SubProject({ project, parent, data, apply, now }: { project: Project; p
         ) : (
           <h3 onDoubleClick={() => setRenaming(true)}>{project.name}</h3>
         )}
+        <TodayBadge data={data} ids={[project.id]} />
         <Menu
           label={`「${project.name}」の操作`}
           items={[
@@ -451,8 +525,9 @@ function RoutineRow({ r, data, apply, now }: { r: Habit; data: PlannerData; appl
   // 卒業・お休みにする／完全に消す（と、その小窓）
   const end = useHabitEnd(r, data, apply)
   const checked = inSamePeriod(r.period, r.checkedAt, now)
+  const today = useContext(TodayContext)?.habits.has(r.id)
   return (
-    <li className={`pl-habit${checked ? ' pl-done' : ''}`}>
+    <li className={`pl-habit${checked ? ' pl-done' : ''}${today ? ' pl-today' : ''}`}>
       <button
         type="button"
         role="checkbox"
@@ -528,6 +603,7 @@ function GoalRow({
   const inner = goalBreakdown(data, g)
   // 回数の目標（30/100 回 ＋1）のメニューと小窓
   const count = useCountMenu(g, data, apply)
+  const today = useContext(TodayContext)?.tasks.has(g.id)
   const title = (
     <NoteTitle
       title={g.title}
@@ -546,7 +622,7 @@ function GoalRow({
             <li
               ref={sortable ? row.ref : undefined}
               style={sortable ? row.style : undefined}
-              className={`pl-goal${g.doneAt ? ' pl-done' : ''}${sortable === 'drag' ? ' pl-goal-free' : ''}${row.isDragging ? ' pl-dragging' : ''}`}
+              className={`pl-goal${g.doneAt ? ' pl-done' : ''}${sortable === 'drag' ? ' pl-goal-free' : ''}${row.isDragging ? ' pl-dragging' : ''}${today ? ' pl-today' : ''}`}
               {...(sortable === 'drag' ? row.handleProps : {})}
             >
               <button
