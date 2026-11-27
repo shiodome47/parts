@@ -2064,3 +2064,8 @@
   background: var(--pl-tier-top);
   color: var(--pl-tier-top-text);
 }
+/* 習慣をドラッグして、プロジェクトのまとまりの見出しに重ねたとき（落とすと、そのプロジェクトへ移る） */
+.planner .pl-habit-group-toggle.pl-habit-group-drop-over {
+  background: color-mix(in srgb, var(--pl-accent) 14%, transparent);
+  box-shadow: inset 0 0 0 2px var(--pl-accent);
+}

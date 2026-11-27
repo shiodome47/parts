@@ -55,6 +55,7 @@ function App() {
 ### 今日の見え方（プロジェクトの習慣をまとめる・「今日」を目立たせる）
 
 - **時間軸**: 同じ列に、同じプロジェクトの習慣が 2 つ以上あると、1 行にまとめてたたむ（「▸ ● ヨガ　あと 7」「▸ ● ヨガ・筋トレ　あと 4」）。数はチェックの残りで、全部済むと「✓ 済み」。押すとその場で開き、チェックもできる（開いた・閉じたは端末ごとに覚える。名前は `planner:openHabitGroups`）。1 つだけのプロジェクトの習慣や、毎月の「その日」で出ているものは、今までどおり 1 行ずつ。まとまりは、プロジェクトの画面の並び順（テーマの中のものはテーマのすぐ後ろ）
+- **時間軸で、習慣をプロジェクトへ移す**: 習慣の行を、まとまりの見出し（▸ ● 習慣）へドラッグして落とすと、そのプロジェクトの習慣になる（閉じていても入れられ、落とすと開く。重ねている間、見出しが光る）。開いたまとまりの中の行へ落とすと、その位置に入る。まとまりの中から外の行へ落とすと、プロジェクトから外れる。まとまりの外どうし・同じまとまりの中どうしは、今までどおり並べ替えだけ。今日などに下ろしたまだのやることのプロジェクトも、そろう
 - **プロジェクト**: 画面の上の「**今日**」を押すと、時間軸の今日の列に出ているもの（ルーチン目標・期日目標。今日に下ろしたものは元に数える）に色の帯が付き、ほかは薄くなる。カードの見出しに「今日 あと 4」（テーマは中のプロジェクトの分も足す）、ボタンに全部の残り。今日のものが無いカードは薄く。カードの並びは変えない。オン・オフは端末ごとに覚える（`planner:projectsToday`）
 
 ### 回数の目標（30/100 回 ＋1）
@@ -182,7 +183,7 @@ data = applyChanges(data, toggleDone(data, data.tasks[0], now))
 |---|---|
 | 時間軸 | `buildColumns(data, now)` 列ごとの表示（やること・習慣・明日の欄・来週の欄）／`todayMarks(data, now)` 今日のもの（習慣・やることと、済んだか）／`horizonForDue(due, now)` 期日から列／`effectiveHorizon(task, now)`／`emptyPriorityGaps(present)` 空の優先度を、並びのどこに出すか（ドラッグの落とし先） |
 | やること | `newTask` `toggleDone` `placeDown`（今日やる、などで下ろす）`returnUp` `moveTo` `moveStep` `setPriority` `setDue` `removeTask` `reorderTasks` `postponeToTomorrow` `bringToToday` |
-| 習慣 | `newHabit` `toggleHabit` `toggleHabitAll` `checkHabitFor`（時間軸の行のチェック。週・月の変わり目の「その日」は、その日の期間に付ける）`placeHabitDown` `habitToTask` `removeHabit`（下ろした先のまだのものも消す）`reorderHabits` `reorderRoutine`（プロジェクトのルーチン目標の並べ替え） |
+| 習慣 | `newHabit` `toggleHabit` `toggleHabitAll` `checkHabitFor`（時間軸の行のチェック。週・月の変わり目の「その日」は、その日の期間に付ける）`placeHabitDown` `habitToTask` `removeHabit`（下ろした先のまだのものも消す）`reorderHabits` `reorderRoutine`（プロジェクトのルーチン目標の並べ替え）`moveHabitToProject`（ほかのプロジェクトへ移す・外す。下ろした先のまだのやることもそろえる） |
 | 習慣を終える | `endHabit(data, habit, 'graduated' \| 'paused', ひとこと, now)` 卒業・お休み（終えた習慣なら、終え方とひとことだけ変える）／`resumeHabit(data, habit, now)` また始める／`endedHabits(habits)` 終えた習慣を新しい順に。`buildColumns` の列は、終えた習慣を `habits` に入れず `ended` に入れる |
 | くり返しの「その日」 | 毎月: `withDay(habit, 20 \| 'end' \| 'w2-3' \| 'wL-5')`／毎週・毎年: `withWhen(habit, 3 \| '12-06' \| '12')`／`whenLabel` `whenDate` `monthDayDate` |
 | プロジェクト | `newProject` `topProjects` `childProjects` `moveProject` `removeProject` `reorderProjects` `projectGoals`（終えていないもの・終えたもの＝新しく終えた順）`reorderGoals` |
