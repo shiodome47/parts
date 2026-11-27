@@ -3,14 +3,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { safeLocalStore } from '../ui/storage'
 import { periodLabel } from '../core'
 import { HORIZON_NAME, HORIZON_SUB, PRIORITY_NAME } from '../core'
-import { buildColumns, emptyPriorityGaps, newHabit, newTask, reorderHabits, reorderTasks, setPriority, type ColumnView, type TaskView } from '../core'
+import { buildColumns, emptyPriorityGaps, newHabit, newTask, reorderTasks, setPriority, type ColumnView, type TaskView } from '../core'
 import { useDroppable } from '@dnd-kit/core'
 import { verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { SortableList } from '../ui/dnd'
 import { PRIORITIES, type PlannerData, type Priority } from '../core'
 import type { PlannerStore } from '../ui/types'
 import { AddInput, HabitRow, ProjectDot, TaskRow } from '../ui/Rows'
-import { groupHabits, type HabitGroup } from './habitGroups'
+import { GROUP_DROP, groupHabits, habitDropChanges, type HabitGroup } from './habitGroups'
 import { JumpBar, scrollToElement } from '../ui/JumpBar'
 import { EndedHabits } from '../ui/EndedHabits'
 
@@ -184,7 +184,13 @@ function Column({
           <SortableList
             ids={ownHabitIds}
             strategy={verticalListSortingStrategy}
-            onMove={(a, o) => void store.apply(reorderHabits(data, ownHabitIds, a, o, new Date()))}
+            onMove={(a, o) => {
+              // まとまり（プロジェクト）へ落とせば、そのプロジェクトへ移る。外へ出せば外れる。ほかは並べ替え
+              void store.apply(habitDropChanges(data, ownHabitIds, groups, a, o, new Date()))
+              // 閉じているまとまりの見出しへ落としたら、開いて、入ったのが見えるようにする
+              const g = o.startsWith(GROUP_DROP) ? groups.find((x) => GROUP_DROP + x.project.id === o) : undefined
+              if (g && !openGroups.has(groupKey(g))) toggleGroup(groupKey(g))
+            }}
           >
             <ul className="pl-list">
               {single.map((v) => (
@@ -282,11 +288,14 @@ function HabitGroupRow({
   now: Date
 }) {
   const { project, label, views, left } = group
+  // 見出しは、習慣をドラッグで落とせる（そのプロジェクトへ移る）
+  const drop = useDroppable({ id: `${GROUP_DROP}${project.id}` })
   return (
     <li className={`pl-habit-group${open ? ' pl-habit-group-open' : ''}${left === 0 ? ' pl-done' : ''}`}>
       <button
+        ref={drop.setNodeRef}
         type="button"
-        className="pl-habit-group-toggle"
+        className={`pl-habit-group-toggle${drop.isOver ? ' pl-habit-group-drop-over' : ''}`}
         aria-expanded={open}
         aria-label={`「${label}」の習慣 ${views.length} 個（${left ? `あと ${left}` : '全部済み'}）`}
         onClick={onToggle}

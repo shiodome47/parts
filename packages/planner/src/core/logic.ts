@@ -938,6 +938,37 @@ export function reorderHabits(data: PlannerData, ids: string[], activeId: string
 }
 
 /**
+ * 習慣を、ほかのプロジェクトへ移す（時間軸で、プロジェクトのまとまりへドラッグしたとき）。
+ * projectId が undefined なら、プロジェクトから外す。overId（落とした先の習慣）があれば、その位置へも並べ替える
+ * （ids は、いま並んでいる順）。下ろした先のまだ終えていないやること（コピー）のプロジェクトも、そろえる
+ */
+export function moveHabitToProject(
+  data: PlannerData,
+  ids: string[],
+  activeId: string,
+  projectId: string | undefined,
+  overId: string | undefined,
+  now: Date,
+): Changes {
+  const habit = data.habits.find((h) => h.id === activeId)
+  if (!habit) return {}
+  if (projectId && !data.projects.some((p) => p.id === projectId)) return {}
+  const sameProject = (habit.projectId ?? undefined) === projectId
+  const reordered = overId ? (reorderHabits(data, ids, activeId, overId, now).habits ?? []) : []
+  if (sameProject) return reordered.length ? { habits: reordered } : {}
+  const t = iso(now)
+  const withProject = <T extends { projectId?: string; updatedAt: string }>(x: T): T => {
+    const { projectId: _p, ...rest } = x
+    return { ...rest, ...(projectId ? { projectId } : {}), updatedAt: t } as T
+  }
+  const base = reordered.find((h) => h.id === activeId) ?? habit
+  const habits = [...reordered.filter((h) => h.id !== activeId), withProject(base)]
+  const copies = new Set(openHabitCopies(data, habit, now))
+  const tasks = data.tasks.filter((x) => copies.has(x.id)).map(withProject)
+  return { habits, ...(tasks.length ? { tasks } : {}) }
+}
+
+/**
  * プロジェクトのルーチン目標をドラッグで並べ替える（同じくり返しのものどうしだけ）。
  * 習慣の並び（order）は、時間軸の同じ期間の列と共有なので、その期間の習慣全体の並びの中で、
  * 落とした先の習慣の位置へ動かす（ほかのプロジェクトの習慣との前後は、できるだけそのまま）
