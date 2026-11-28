@@ -1,4 +1,4 @@
-import { Check, CornerUpLeft, FileText } from 'lucide-react'
+import { Check, CornerUpLeft, FileText, X } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { dayKey, dueLabelWeekday, periodHorizon } from '../core'
 import { HORIZON_NAME, PERIOD_NAME, PLACE_LABEL, PLACED_MARK, PRIORITY_NAME } from '../core'
@@ -14,6 +14,7 @@ import {
   setDue,
   setPriority,
   toggleDone,
+  cancelTask,
   checkHabitFor,
   bringToToday,
   isForTomorrow,
@@ -47,6 +48,8 @@ export function TaskRow({
   now: Date
 }) {
   const { task, label, done, faded, placedTo, from, project } = view
+  // やめた（やらないことにした）もの。✓ ではなく ✕ で、取り消し線
+  const canceled = done && !!task.canceled
   const { simple } = useDisplay()
   const [renaming, setRenaming] = useState(false)
   const [noteOpen, setNoteOpen] = useState(false)
@@ -85,6 +88,8 @@ export function TaskRow({
     ...count.items,
     'separator',
     ...(task.parentId || task.habitId ? [{ label: `${from ? HORIZON_NAME[from as BoardHorizon] ?? '元' : '元'}に戻す`, onSelect: () => apply(returnUp(data, task, now)) }] : []),
+    // やらないことにした: ✕ と取り消し線で残り、終えたものと同じく、その期間が過ぎたら列から消える（✕ を押すと取り消せる）
+    ...(!done ? [{ label: 'やめる（やらないことにする）', onSelect: () => apply(cancelTask(data, task, now)) }] : []),
     { label: '消す', danger: true, onSelect: () => apply(removeTask(data, task, now)) },
   ]
 
@@ -93,7 +98,7 @@ export function TaskRow({
     <li
       ref={sortable.ref}
       style={sortable.style}
-      className={`pl-task pl-p-${task.priority}${faded ? ' pl-faded' : ''}${done ? ' pl-done' : ''}${sortable.isDragging ? ' pl-dragging' : ''}`}
+      className={`pl-task pl-p-${task.priority}${faded ? ' pl-faded' : ''}${done ? ' pl-done' : ''}${canceled ? ' pl-canceled' : ''}${sortable.isDragging ? ' pl-dragging' : ''}`}
       {...sortable.handleProps}
     >
       <span className="pl-task-label">{label}</span>
@@ -101,11 +106,12 @@ export function TaskRow({
         type="button"
         role="checkbox"
         aria-checked={done}
-        aria-label={done ? `「${task.title}」を終えたのを取り消す` : `「${task.title}」を終える`}
+        aria-label={canceled ? `「${task.title}」をやめたのを取り消す` : done ? `「${task.title}」を終えたのを取り消す` : `「${task.title}」を終える`}
+        title={canceled ? 'やめた（押すと取り消す）' : undefined}
         className="pl-circle"
         onClick={() => apply(toggleDone(data, task, now))}
       >
-        {done && <Check aria-hidden="true" />}
+        {canceled ? <X aria-hidden="true" /> : done && <Check aria-hidden="true" />}
       </button>
       <div className="pl-task-main">
         {renaming ? (

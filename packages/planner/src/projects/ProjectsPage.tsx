@@ -1,4 +1,4 @@
-import { Check, GripVertical, Plus, Sun } from 'lucide-react'
+import { Check, GripVertical, Plus, Sun, X } from 'lucide-react'
 import { verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { SortableList, useLampSensors, useSortableRow } from '../ui/dnd'
 import { CardBoard, type CardBoardCardState } from 'linkshelf'
@@ -22,6 +22,7 @@ import {
   reorderProjects,
   reorderRoutine,
   toggleDone,
+  cancelTask,
   toggleHabitAll,
   todayMarks,
   topProjects,
@@ -495,7 +496,8 @@ function ProjectBody({
         {/* 終えた目標は、一番下にたたんでおく（新しく終えた順。開けば見られ、チェックを外せば上へ戻る） */}
         {done.length > 0 && (
           <details className="pl-ended">
-            <summary className="pl-ended-summary">終えた目標（{done.length}）</summary>
+            {/* やめた目標（✕）も、ここにたたむ。あれば見出しを「終えた・やめた目標」に */}
+            <summary className="pl-ended-summary">{done.some((g) => g.canceled) ? '終えた・やめた目標' : '終えた目標'}（{done.length}）</summary>
             <ul className="pl-list">
               {done.map((g) => (
                 <GoalRow key={g.id} g={g} data={data} apply={apply} now={now} openers={openers} />
@@ -666,18 +668,21 @@ function GoalRow({
             <li
               ref={sortable ? row.ref : undefined}
               style={sortable ? row.style : undefined}
-              className={`pl-goal${g.doneAt ? ' pl-done' : ''}${sortable === 'drag' ? ' pl-goal-free' : ''}${row.isDragging ? ' pl-dragging' : ''}${today ? ' pl-today' : ''}`}
+              className={`pl-goal${g.doneAt ? ' pl-done' : ''}${g.doneAt && g.canceled ? ' pl-canceled' : ''}${sortable === 'drag' ? ' pl-goal-free' : ''}${row.isDragging ? ' pl-dragging' : ''}${today ? ' pl-today' : ''}`}
               {...(sortable === 'drag' ? row.handleProps : {})}
             >
               <button
                 type="button"
                 role="checkbox"
                 aria-checked={!!g.doneAt}
-                aria-label={g.doneAt ? `「${g.title}」を終えたのを取り消す` : `「${g.title}」を終える`}
+                aria-label={
+                  g.doneAt && g.canceled ? `「${g.title}」をやめたのを取り消す` : g.doneAt ? `「${g.title}」を終えたのを取り消す` : `「${g.title}」を終える`
+                }
+                title={g.doneAt && g.canceled ? 'やめた（押すと取り消す）' : undefined}
                 className="pl-circle"
                 onClick={() => apply(toggleDone(data, g, now))}
               >
-                {g.doneAt && <Check aria-hidden="true" />}
+                {g.doneAt && g.canceled ? <X aria-hidden="true" /> : g.doneAt && <Check aria-hidden="true" />}
               </button>
               <DueChip
                 due={g.due}
@@ -714,6 +719,8 @@ function GoalRow({
                       ]
                     : [{ label: '細かく分ける…', onSelect: () => setSplitting(true) }]),
                   'separator',
+                  // やらないことにした: ✕ と取り消し線で「終えた目標」にたたまれる（✕ を押すと取り消せる）
+                  ...(!g.doneAt ? [{ label: 'やめる（やらないことにする）', onSelect: () => apply(cancelTask(data, g, now)) }] : []),
                   { label: '消す', danger: true, onSelect: () => apply(removeTask(data, g, now)) },
                 ]}
               />
