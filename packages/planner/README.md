@@ -50,6 +50,7 @@ function App() {
 - プロジェクトのルーチン目標も、行をつかんでドラッグで並べ替えられます（同じくり返しのものどうし。並びは時間軸の習慣と共有）
 - キーボード: 行を持ち上げる（スペース・Enter → 矢印 → スペース）のは、行そのものにフォーカスがあるときだけ。行の中のボタン・名前を書き換える欄でのスペース・Enter は、そのボタン・欄に効きます。… のメニューは、開くと最初の選択肢にフォーカスし、矢印・Home・End で移り、Esc・Tab で閉じて … に戻ります
 - プロジェクトの終えた期日目標は、一番下の **「終えた目標（n）」** にたたみます（はじめは閉じている。新しく終えた順。開けば見られ、チェックを外せば上へ戻る）。細かいステップを足していっても、カードが終えたもので埋まりません
+- **やめる（やらないことにする）**: やること・期日目標の … →「やめる（やらないことにする）」。✓ ではなく灰色の ✕ と取り消し線になり、終えたものと同じく、その期間が過ぎたら列から消える（プロジェクトでは「終えた・やめた目標」にたたむ）。✕ を押すと取り消せる。下ろした先でやめると、元もやめたことになる（終えるときと同じ）。習慣から下ろしたものをやめても、習慣のチェックは付かず、習慣の行は薄くならない（もう一度下ろせる）。振り返りでは「やったこと」に入れず、目標の中身の進み具合（2/5）にも数えない
 - 時間軸は、スマホの幅では列を横にすべらせ、上の帯から列を選べます。プロジェクトは、画面の幅に合わせて段組みになり、カードをドラッグで並べ替えられます（キーボードでも）
 
 ### 今日の見え方（プロジェクトの習慣をまとめる・「今日」を目立たせる）
@@ -145,7 +146,7 @@ const data: PlannerData = { tasks: [], habits: [], projects: [] }
 
 | 形 | 中身 |
 |---|---|
-| `Task` | やること。`horizon`（列）・`priority`（A〜D・P）・`due`（期日 YYYY-MM-DD）・`projectId` など。回数の目標は `count`（`target` めざす数・`done` 今の数・`log` 日ごとに足した数） |
+| `Task` | やること。`horizon`（列）・`priority`（A〜D・P）・`due`（期日 YYYY-MM-DD）・`projectId` など。回数の目標は `count`（`target` めざす数・`done` 今の数・`log` 日ごとに足した数）。やめたものは `canceled: true`（`doneAt` にやめた日時） |
 | `Habit` | 習慣（くり返し）。記録（`history`）が上限で古い日を消したら、残っている一番古い日を `historyFrom` に。`period`（毎日・毎週・毎月・毎年）と「その日」（`weekday`・`day`・`yearDay`）。終えたら `endedAt`・`endedAs`（`'graduated'` 卒業／`'paused'` お休み）・`endNote`（ひとこと）。また始めたら、休んでいた間を `breaks` に残す。3 段階は `tiers`（`low`・`mid`・`top` の中身）と `levels`（チェックした日ごとの段階 1 低・2 中・3 上。無い日は段階を付ける前のチェック） |
 | `Project` | プロジェクト・テーマ。テーマの中にプロジェクトを入れられる（1 段だけ）。`goalId` は、そのプロジェクトが「中身」になっている期日目標 |
 
@@ -182,7 +183,7 @@ data = applyChanges(data, toggleDone(data, data.tasks[0], now))
 | 分類 | 関数 |
 |---|---|
 | 時間軸 | `buildColumns(data, now)` 列ごとの表示（やること・習慣・明日の欄・来週の欄）／`todayMarks(data, now)` 今日のもの（習慣・やることと、済んだか）／`horizonForDue(due, now)` 期日から列／`effectiveHorizon(task, now)`／`emptyPriorityGaps(present)` 空の優先度を、並びのどこに出すか（ドラッグの落とし先） |
-| やること | `newTask` `toggleDone` `placeDown`（今日やる、などで下ろす）`returnUp` `moveTo` `moveStep` `setPriority` `setDue` `removeTask` `reorderTasks` `postponeToTomorrow` `bringToToday` |
+| やること | `newTask` `toggleDone` `placeDown`（今日やる、などで下ろす）`returnUp` `moveTo` `moveStep` `setPriority` `setDue` `removeTask` `reorderTasks` `postponeToTomorrow` `bringToToday` `cancelTask`（やめる。取り消しは `toggleDone`） |
 | 習慣 | `newHabit` `toggleHabit` `toggleHabitAll` `checkHabitFor`（時間軸の行のチェック。週・月の変わり目の「その日」は、その日の期間に付ける）`placeHabitDown` `habitToTask` `removeHabit`（下ろした先のまだのものも消す）`reorderHabits` `reorderRoutine`（プロジェクトのルーチン目標の並べ替え）`moveHabitToProject`（ほかのプロジェクトへ移す・外す。下ろした先のまだのやることもそろえる） |
 | 習慣を終える | `endHabit(data, habit, 'graduated' \| 'paused', ひとこと, now)` 卒業・お休み（終えた習慣なら、終え方とひとことだけ変える）／`resumeHabit(data, habit, now)` また始める／`endedHabits(habits)` 終えた習慣を新しい順に。`buildColumns` の列は、終えた習慣を `habits` に入れず `ended` に入れる |
 | くり返しの「その日」 | 毎月: `withDay(habit, 20 \| 'end' \| 'w2-3' \| 'wL-5')`／毎週・毎年: `withWhen(habit, 3 \| '12-06' \| '12')`／`whenLabel` `whenDate` `monthDayDate` |
@@ -190,7 +191,7 @@ data = applyChanges(data, toggleDone(data, data.tasks[0], now))
 | 習慣の 3 段階 | `setHabitTiers(habit, { low, mid, top } \| undefined, now)` 3 段階にする・中身を変える・やめる／`setHabitLevel(habit, day, 1 \| 2 \| 3, now)` その日（その期間）の段階を決める／`habitLevelOn(habit, day)` その日の段階（記録が無ければ undefined）／`tiersLabel(tiers)` 「低 3分・中 10分・上 30分」／`LEVEL_NAME` 低・中・上。チェック（`toggleHabit` など）で「低」が付き、外すと消える |
 | 回数の目標 | `setCount(data, task, { target, done } \| undefined, now)` 回数の目標にする・直す・やめる／`addCount(data, task, 1, now)` 足す（-1 でへらす）／`countedTask(data, task)` 数える項目（下ろした先なら元）／`countsOn(data, day)` その日に足した回数 |
 | 目標を細かく分ける | `splitGoal(data, goal, name, now)` 中身のプロジェクトを作る／`linkGoal(data, goal, project, now)` 今あるものをつなぐ／`unlinkGoal(project, now)`／`goalBreakdown(data, goal)` 中身と進み具合／`breakdownOf(data, project)` どの目標の中身か／`linkableProjects(data, goal)` つなげるもの |
-| 振り返り | `doneOn(data, day, now)` その日に済ませたこと／`streak(habit, now)` 続いた日数／`toggleHabitOnDay` `finishOnDay`（過ぎた日に付け直す）／`habitActiveOn(habit, day)` その日に続けていたか（始める前・終えたあと・休んでいた間は数えない。「毎日 3/4」の分母に使う）／`habitRecord(habit, now)` 始めてから終えるまでの、できた数と期間の数 |
+| 振り返り | `doneOn(data, day, now)` その日に済ませたこと（やめたものは入れない）／`canceledOn(data, day, now)` その日にやめたこと／`streak(habit, now)` 続いた日数／`toggleHabitOnDay` `finishOnDay`（過ぎた日に付け直す）／`habitActiveOn(habit, day)` その日に続けていたか（始める前・終えたあと・休んでいた間は数えない。「毎日 3/4」の分母に使う）／`habitRecord(habit, now)` 始めてから終えるまでの、できた数と期間の数 |
 | 日付 | `dayKey` `weekKey` `weekStart` `addDays` `periodLabel` `dueLabel` `shortDueLabel` |
 | 当てる | `applyChanges(data, changes)` ／ `mergeById(list, puts, deleteIds)` |
 

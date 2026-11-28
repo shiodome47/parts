@@ -451,12 +451,14 @@ function descendantsOf(tasks: Task[], id: string, now: Date, seen = new Set<stri
 }
 
 /**
- * 終える・終えたのを取り消す。
+ * 終える・終えたのを取り消す（やめたものなら、やめたのを取り消す）。
  * 下ろした先で終えたら、元（さらにその元）も終える。元で終えたら、生きている下ろした先も終える。
  */
 export function toggleDone(data: PlannerData, task: Task, now: Date): Changes {
   const finishing = !task.doneAt
   const tasks = doneTasks(data, task, finishing, now)
+  // やめたのを取り消すときは、習慣のチェックには触れない（やめたときに付けていないので）
+  if (task.canceled) return { tasks }
   // 習慣から下ろしたもの（さらに下ろしたものも）なら、習慣の今の期間のチェックも合わせる。
   // 取り消すときは、今の期間に終えたものだけ（前の期間に終えたものを取り消しても、今の期間のチェックは外さない）
   const habitId = habitIdOf(task, new Map(data.tasks.map((t) => [t.id, t])))
@@ -476,9 +478,28 @@ function doneTasks(data: PlannerData, task: Task, finishing: boolean, now: Date)
     .map((id) => byId.get(id))
     .filter((x): x is Task => !!x)
     .map((x) => {
-      const { doneAt: _d, ...rest } = x
-      return finishing ? { ...rest, doneAt: x.doneAt ?? t, updatedAt: t } : { ...rest, updatedAt: t }
+      const { doneAt: _d, canceled: _c, ...rest } = x
+      return finishing ? { ...x, doneAt: x.doneAt ?? t, updatedAt: t } : { ...rest, updatedAt: t }
     })
+}
+
+/**
+ * やめる（やらないことにする）。終えたのと同じく列から消える（その期間が過ぎるまでは、✕ と取り消し線で残る）。
+ * 下ろした先・元も一緒に（終えるときと同じ。下ろした先は、同じものを短い列に置いたものなので）。
+ * もう終えたものには付けない。習慣から下ろしたものでも、習慣のチェックは付けない（習慣をやめるのは「卒業・お休み」）。
+ * 取り消すときは toggleDone（✕ を押す）
+ */
+export function cancelTask(data: PlannerData, task: Task, now: Date): Changes {
+  if (task.doneAt) return {}
+  const byId = new Map(data.tasks.map((t) => [t.id, t]))
+  byId.set(task.id, task)
+  const ids = new Set<string>([task.id, ...descendantsOf(data.tasks, task.id, now), ...ancestorsOf(task, byId).map((p) => p.id)])
+  const t = iso(now)
+  const tasks = [...ids]
+    .map((id) => byId.get(id))
+    .filter((x): x is Task => !!x && !x.doneAt)
+    .map((x) => ({ ...x, doneAt: t, canceled: true as const, updatedAt: t }))
+  return tasks.length ? { tasks } : {}
 }
 
 /** 同じ列・同じ優先度の中で、1 つ上・下と入れ替える */
@@ -782,7 +803,8 @@ export function addCount(data: PlannerData, task: Task, delta: number, now: Date
 export function goalBreakdown(data: PlannerData, goal: Task): { project: Project; done: number; total: number } | undefined {
   const project = data.projects.find((p) => p.goalId === goal.id)
   if (!project) return undefined
-  const goals = data.tasks.filter((t) => isProjectGoal(t) && t.projectId === project.id)
+  // やめた目標は、数に入れない（2/5 のうち 1 つをやめたら 2/4）
+  const goals = data.tasks.filter((t) => isProjectGoal(t) && t.projectId === project.id && !t.canceled)
   return { project, done: goals.filter((t) => t.doneAt).length, total: goals.length }
 }
 
@@ -1005,9 +1027,11 @@ export function reorderProjects(data: PlannerData, activeId: string, overId: str
 
 /** その習慣から下ろして、今も生きている項目（無ければ undefined） */
 export function activeHabitChild(habit: Habit, tasks: Task[], now: Date): Task | undefined {
-  // 習慣から直接下ろしたもの（さらに下ろした先は除く）で、前の期間に終えたものは除く（週・月が変わったら、もう今の分ではない）
+  // 習慣から直接下ろしたもの（さらに下ろした先は除く）で、前の期間に終えたものは除く（週・月が変わったら、もう今の分ではない）。
+  // やめたものも除く（習慣の行は薄くせず、チェックも、もう一度下ろすこともできる）
   return tasks.find(
-    (t) => t.habitId === habit.id && !t.parentId && !isExpired(t, now) && (!t.doneAt || inSamePeriod(habit.period, t.doneAt, now)),
+    (t) =>
+      t.habitId === habit.id && !t.parentId && !t.canceled && !isExpired(t, now) && (!t.doneAt || inSamePeriod(habit.period, t.doneAt, now)),
   )
 }
 
@@ -1045,7 +1069,8 @@ export function toggleHabitAll(data: PlannerData, habit: Habit, now: Date): Chan
   const next = toggleHabit(habit, now)
   const checking = inSamePeriod(next.period, next.checkedAt, now)
   const child = activeHabitChild(habit, data.tasks, now)
-  if (!child || !!child.doneAt === checking) return { habits: [next] }
+  // やめた下ろした先は、習慣のチェックに合わせて開け閉めしない（やめたまま）
+  if (!child || child.canceled || !!child.doneAt === checking) return { habits: [next] }
   // 下ろした先と、そこからさらに下ろした先も一緒に
   return { habits: [next], tasks: doneTasks(data, child, checking, now) }
 }

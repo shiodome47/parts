@@ -148,12 +148,23 @@ export interface DoneItem {
  * 下ろした先と元の両方が終わっているときは、下ろした先（実際にやった方）だけを出す。
  */
 export function doneOn(data: PlannerData, day: Date, now: Date): DoneItem[] {
+  return closedOn(data, day, now, false)
+}
+
+/** その日にやめたこと（やらないことにしたもの。下ろした先でやめたときは、下ろした先だけ） */
+export function canceledOn(data: PlannerData, day: Date, now: Date): DoneItem[] {
+  return closedOn(data, day, now, true)
+}
+
+/** その日に終えた（canceled: false）・やめた（true）もの */
+function closedOn(data: PlannerData, day: Date, now: Date, canceled: boolean): DoneItem[] {
   const key = dayKey(day)
   const projects = new Map(data.projects.map((p) => [p.id, p]))
+  const closed = (t: Task) => !!t.doneAt && !!t.canceled === canceled && dayKey(new Date(t.doneAt)) === key
   // 同じ日に、下ろした先で終えた元だけを除く（元を別の日にあらためて終えたときは、その日に出す）
-  const doneParents = new Set(data.tasks.filter((t) => t.parentId && t.doneAt && dayKey(new Date(t.doneAt)) === key).map((t) => t.parentId!))
+  const doneParents = new Set(data.tasks.filter((t) => t.parentId && closed(t)).map((t) => t.parentId!))
   return data.tasks
-    .filter((t) => t.doneAt && dayKey(new Date(t.doneAt)) === key && !doneParents.has(t.id))
+    .filter((t) => closed(t) && !doneParents.has(t.id))
     .sort((a, b) => a.doneAt!.localeCompare(b.doneAt!))
     .map((task) => ({
       task,

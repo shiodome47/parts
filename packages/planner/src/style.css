@@ -2069,3 +2069,13 @@
   background: color-mix(in srgb, var(--pl-accent) 14%, transparent);
   box-shadow: inset 0 0 0 2px var(--pl-accent);
 }
+/* やめたもの（やらないことにした）: ✓ の緑ではなく、灰色の ✕。名前は取り消し線（終えたものと同じ） */
+.planner .pl-done.pl-canceled .pl-circle {
+  border-color: var(--pl-muted);
+  background: var(--pl-panel-2);
+  color: var(--pl-muted);
+}
+.planner .pl-canceled .pl-title-text {
+  color: var(--pl-muted);
+  text-decoration: line-through;
+}
